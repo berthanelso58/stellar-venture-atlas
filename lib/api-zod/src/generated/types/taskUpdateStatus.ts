@@ -10,8 +10,8 @@ export type TaskUpdateStatus = typeof TaskUpdateStatus[keyof typeof TaskUpdateSt
 
 
 export const TaskUpdateStatus = {
-  seed: 'seed',
-  sprouting: 'sprouting',
-  blooming: 'blooming',
-  done: 'done',
+  plan: 'plan',
+  doing: 'doing',
+  check: 'check',
+  next_plan: 'next_plan',
 } as const;

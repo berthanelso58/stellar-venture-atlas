@@ -413,10 +413,6 @@ paths:
           required: true
           schema:
             type: integer
-        - name: milestoneId
-          in: query
-          schema:
-            type: ["integer", "null"]
       responses:
         "200":
           description: List of tasks
@@ -1009,7 +1005,8 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [seed, sprouting, blooming, done]
+          enum: [plan, doing, check, next_plan]
+          description: "Kanban stages: plan=Plan, doing=Doing, check=Review KPI + Residual Close, next_plan=Next Plan"
         priority:
           type: string
           enum: [low, medium, high, critical]
@@ -1056,7 +1053,7 @@ components:
           type: string
         status:
           type: string
-          enum: [seed, sprouting, blooming, done]
+          enum: [plan, doing, check, next_plan]
         priority:
           type: string
           enum: [low, medium, high, critical]

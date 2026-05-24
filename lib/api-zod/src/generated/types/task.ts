@@ -18,6 +18,7 @@ export interface Task {
   title: string;
   /** @nullable */
   description?: string | null;
+  /** Kanban stages: plan=Plan, doing=Doing, check=Review KPI + Residual Close, next_plan=Next Plan */
   status: TaskStatus;
   priority?: TaskPriority;
   /**

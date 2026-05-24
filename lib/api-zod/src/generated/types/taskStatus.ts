@@ -6,12 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Kanban stages: plan=Plan, doing=Doing, check=Review KPI + Residual Close, next_plan=Next Plan
+ */
 export type TaskStatus = typeof TaskStatus[keyof typeof TaskStatus];
 
 
 export const TaskStatus = {
-  seed: 'seed',
-  sprouting: 'sprouting',
-  blooming: 'blooming',
-  done: 'done',
+  plan: 'plan',
+  doing: 'doing',
+  check: 'check',
+  next_plan: 'next_plan',
 } as const;

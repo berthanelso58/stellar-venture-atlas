@@ -186,14 +186,17 @@ export interface MilestoneUpdate {
   targetDate?: string;
 }
 
+/**
+ * Kanban stages: plan=Plan, doing=Doing, check=Review KPI + Residual Close, next_plan=Next Plan
+ */
 export type TaskStatus = typeof TaskStatus[keyof typeof TaskStatus];
 
 
 export const TaskStatus = {
-  seed: 'seed',
-  sprouting: 'sprouting',
-  blooming: 'blooming',
-  done: 'done',
+  plan: 'plan',
+  doing: 'doing',
+  check: 'check',
+  next_plan: 'next_plan',
 } as const;
 
 export type TaskPriority = typeof TaskPriority[keyof typeof TaskPriority];
@@ -216,6 +219,7 @@ export interface Task {
   title: string;
   /** @nullable */
   description?: string | null;
+  /** Kanban stages: plan=Plan, doing=Doing, check=Review KPI + Residual Close, next_plan=Next Plan */
   status: TaskStatus;
   priority?: TaskPriority;
   /**
@@ -255,10 +259,10 @@ export type TaskUpdateStatus = typeof TaskUpdateStatus[keyof typeof TaskUpdateSt
 
 
 export const TaskUpdateStatus = {
-  seed: 'seed',
-  sprouting: 'sprouting',
-  blooming: 'blooming',
-  done: 'done',
+  plan: 'plan',
+  doing: 'doing',
+  check: 'check',
+  next_plan: 'next_plan',
 } as const;
 
 export type TaskUpdatePriority = typeof TaskUpdatePriority[keyof typeof TaskUpdatePriority];
@@ -490,11 +494,4 @@ export interface GameDashboard {
   kpiSummary: GameDashboardKpiSummaryItem[];
   recentActivity: GameDashboardRecentActivityItem[];
 }
-
-export type ListTasksParams = {
-/**
- * @nullable
- */
-milestoneId?: number | null;
-};
 

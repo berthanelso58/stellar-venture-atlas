@@ -26,7 +26,6 @@ export * from './kpiEntryInput';
 export * from './kpiInput';
 export * from './kpiTrend';
 export * from './kpiUpdate';
-export * from './listTasksParams';
 export * from './milestone';
 export * from './milestoneInput';
 export * from './milestoneStatus';

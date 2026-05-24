@@ -33,7 +33,6 @@ import type {
   KpiEntryInput,
   KpiInput,
   KpiUpdate,
-  ListTasksParams,
   Milestone,
   MilestoneInput,
   MilestoneUpdate,
@@ -1389,29 +1388,20 @@ export const useDeleteMilestone = <TError = ErrorType<unknown>,
       return useMutation(getDeleteMilestoneMutationOptions(options));
     }
 
-export const getListTasksUrl = (gameId: number,
-    params?: ListTasksParams,) => {
-  const normalizedParams = new URLSearchParams();
+export const getListTasksUrl = (gameId: number,) => {
 
-  Object.entries(params || {}).forEach(([key, value]) => {
 
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
-    }
-  });
 
-  const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/api/games/${gameId}/tasks?${stringifiedParams}` : `/api/games/${gameId}/tasks`
+  return `/api/games/${gameId}/tasks`
 }
 
 /**
  * @summary List tasks in a game
  */
-export const listTasks = async (gameId: number,
-    params?: ListTasksParams, options?: RequestInit): Promise<Task[]> => {
+export const listTasks = async (gameId: number, options?: RequestInit): Promise<Task[]> => {
 
-  return customFetch<Task[]>(getListTasksUrl(gameId,params),
+  return customFetch<Task[]>(getListTasksUrl(gameId),
   {
     ...options,
     method: 'GET'
@@ -1424,25 +1414,23 @@ export const listTasks = async (gameId: number,
 
 
 
-export const getListTasksQueryKey = (gameId: number,
-    params?: ListTasksParams,) => {
+export const getListTasksQueryKey = (gameId: number,) => {
     return [
-    `/api/games/${gameId}/tasks`, ...(params ? [params] : [])
+    `/api/games/${gameId}/tasks`
     ] as const;
     }
 
 
-export const getListTasksQueryOptions = <TData = Awaited<ReturnType<typeof listTasks>>, TError = ErrorType<unknown>>(gameId: number,
-    params?: ListTasksParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTasks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListTasksQueryOptions = <TData = Awaited<ReturnType<typeof listTasks>>, TError = ErrorType<unknown>>(gameId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTasks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListTasksQueryKey(gameId,params);
+  const queryKey =  queryOptions?.queryKey ?? getListTasksQueryKey(gameId);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTasks>>> = ({ signal }) => listTasks(gameId,params, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTasks>>> = ({ signal }) => listTasks(gameId, { signal, ...requestOptions });
 
 
 
@@ -1460,12 +1448,11 @@ export type ListTasksQueryError = ErrorType<unknown>
  */
 
 export function useListTasks<TData = Awaited<ReturnType<typeof listTasks>>, TError = ErrorType<unknown>>(
- gameId: number,
-    params?: ListTasksParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTasks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ gameId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTasks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListTasksQueryOptions(gameId,params,options)
+  const queryOptions = getListTasksQueryOptions(gameId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

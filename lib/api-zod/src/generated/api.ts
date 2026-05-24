@@ -346,10 +346,6 @@ export const ListTasksParams = zod.object({
   "gameId": zod.coerce.number()
 })
 
-export const ListTasksQueryParams = zod.object({
-  "milestoneId": zod.coerce.number().nullish()
-})
-
 export const ListTasksResponseItem = zod.object({
   "id": zod.number(),
   "gameId": zod.number(),
@@ -357,7 +353,7 @@ export const ListTasksResponseItem = zod.object({
   "assignedPlayerId": zod.number().nullish(),
   "title": zod.string(),
   "description": zod.string().nullish(),
-  "status": zod.enum(['seed', 'sprouting', 'blooming', 'done']),
+  "status": zod.enum(['plan', 'doing', 'check', 'next_plan']).describe('Kanban stages: plan=Plan, doing=Doing, check=Review KPI + Residual Close, next_plan=Next Plan'),
   "priority": zod.enum(['low', 'medium', 'high', 'critical']).optional(),
   "kpiImpact": zod.string().nullish().describe('Which KPI this task impacts'),
   "dueDate": zod.string().nullish(),
@@ -400,7 +396,7 @@ export const UpdateTaskBody = zod.object({
   "assignedPlayerId": zod.number().nullish(),
   "title": zod.string().optional(),
   "description": zod.string().optional(),
-  "status": zod.enum(['seed', 'sprouting', 'blooming', 'done']).optional(),
+  "status": zod.enum(['plan', 'doing', 'check', 'next_plan']).optional(),
   "priority": zod.enum(['low', 'medium', 'high', 'critical']).optional(),
   "kpiImpact": zod.string().optional(),
   "dueDate": zod.string().optional()
@@ -413,7 +409,7 @@ export const UpdateTaskResponse = zod.object({
   "assignedPlayerId": zod.number().nullish(),
   "title": zod.string(),
   "description": zod.string().nullish(),
-  "status": zod.enum(['seed', 'sprouting', 'blooming', 'done']),
+  "status": zod.enum(['plan', 'doing', 'check', 'next_plan']).describe('Kanban stages: plan=Plan, doing=Doing, check=Review KPI + Residual Close, next_plan=Next Plan'),
   "priority": zod.enum(['low', 'medium', 'high', 'critical']).optional(),
   "kpiImpact": zod.string().nullish().describe('Which KPI this task impacts'),
   "dueDate": zod.string().nullish(),
