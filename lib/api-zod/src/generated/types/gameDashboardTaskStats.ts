@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
-}
+export type GameDashboardTaskStats = {
+  total: number;
+  done: number;
+  blooming: number;
+  sprouting: number;
+  seed: number;
+};

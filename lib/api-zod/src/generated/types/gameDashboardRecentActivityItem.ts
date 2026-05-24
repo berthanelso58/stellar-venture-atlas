@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
-}
+export type GameDashboardRecentActivityItem = {
+  type: string;
+  title: string;
+  timestamp: Date;
+};
