@@ -5,8 +5,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
 import Home from "./pages/home";
-import GameLayout from "./pages/game/layout";
 import Tasks from "./pages/game/tasks";
+import Roadmap from "./pages/game/roadmap";
 import Milestones from "./pages/game/milestones";
 import Risks from "./pages/game/risks";
 import Kpis from "./pages/game/kpis";
@@ -18,7 +18,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/game/:gameId" component={GameLayout} />
+      <Route path="/game/:gameId" component={Roadmap} />
+      <Route path="/game/:gameId/roadmap" component={Roadmap} />
       <Route path="/game/:gameId/tasks" component={Tasks} />
       <Route path="/game/:gameId/milestones" component={Milestones} />
       <Route path="/game/:gameId/risks" component={Risks} />

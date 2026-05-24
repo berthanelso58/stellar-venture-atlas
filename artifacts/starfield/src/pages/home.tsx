@@ -31,7 +31,7 @@ export default function Home() {
         setOpen(false);
         setForm({ name: "", mission: "", description: "", playerCount: "1" });
         invalidate();
-        setLocation(`/game/${game.id}/tasks`);
+        setLocation(`/game/${game.id}/roadmap`);
       }
     });
   };
@@ -78,7 +78,7 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {games.map(game => (
-              <Link key={game.id} href={`/game/${game.id}/tasks`}>
+              <Link key={game.id} href={`/game/${game.id}/roadmap`}>
                 <div data-testid={`card-game-${game.id}`} className="border border-border bg-card p-6 rounded-xl hover:border-primary/50 transition-all cursor-pointer group hover-elevate">
                   <div className="flex items-start justify-between mb-3">
                     <h2 className="text-lg font-bold text-card-foreground group-hover:text-primary transition-colors leading-tight">{game.name}</h2>
