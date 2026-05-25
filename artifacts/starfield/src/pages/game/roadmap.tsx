@@ -13,25 +13,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Star, Flag, Zap, ChevronDown, ChevronRight, Pencil, Check } from "lucide-react";
+import { Plus, Flag, Zap, ChevronDown, ChevronRight, Pencil, Check } from "lucide-react";
 import GameLayout from "./layout";
+import { useLang } from "@/i18n";
 
 type MilestoneStatus = "planted" | "growing" | "blooming" | "harvested";
 type TaskStatus = "plan" | "doing" | "check" | "next_plan";
 type Priority = "low" | "medium" | "high" | "critical";
 
-const MS_COLORS: Record<MilestoneStatus, { stroke: string; fill: string; bg: string; label: string }> = {
-  planted:  { stroke: "#64748b", fill: "#1e293b", bg: "rgba(100,116,139,0.08)", label: "Planted" },
-  growing:  { stroke: "#4ade80", fill: "#052e16", bg: "rgba(74,222,128,0.08)",  label: "Growing" },
-  blooming: { stroke: "#fb923c", fill: "#451a03", bg: "rgba(251,146,60,0.08)",  label: "Blooming" },
-  harvested:{ stroke: "#a78bfa", fill: "#2e1065", bg: "rgba(167,139,250,0.10)", label: "Harvested" },
+const MS_COLORS: Record<MilestoneStatus, { stroke: string; fill: string; bg: string; labelKey: string }> = {
+  planted:  { stroke: "#64748b", fill: "#1e293b", bg: "rgba(100,116,139,0.08)", labelKey: "planted" },
+  growing:  { stroke: "#4ade80", fill: "#052e16", bg: "rgba(74,222,128,0.08)",  labelKey: "growing" },
+  blooming: { stroke: "#fb923c", fill: "#451a03", bg: "rgba(251,146,60,0.08)",  labelKey: "blooming" },
+  harvested:{ stroke: "#a78bfa", fill: "#2e1065", bg: "rgba(167,139,250,0.10)", labelKey: "harvested" },
 };
 
-const TASK_COLS: { id: TaskStatus; label: string; dot: string; ring: string }[] = [
-  { id: "plan",      label: "Plan",  dot: "#475569", ring: "#64748b" },
-  { id: "doing",     label: "Doing", dot: "#d97706", ring: "#fbbf24" },
-  { id: "check",     label: "Check", dot: "#2563eb", ring: "#60a5fa" },
-  { id: "next_plan", label: "Done",  dot: "#16a34a", ring: "#4ade80" },
+const TASK_COLS_DEF: { id: TaskStatus; labelKey: string; dot: string; ring: string }[] = [
+  { id: "plan",      labelKey: "plan",  dot: "#475569", ring: "#64748b" },
+  { id: "doing",     labelKey: "doing", dot: "#d97706", ring: "#fbbf24" },
+  { id: "check",     labelKey: "check", dot: "#2563eb", ring: "#60a5fa" },
+  { id: "next_plan", labelKey: "done",  dot: "#16a34a", ring: "#4ade80" },
 ];
 
 const PRIORITY_BADGE: Record<Priority, string> = {
@@ -41,7 +42,6 @@ const PRIORITY_BADGE: Record<Priority, string> = {
   critical: "text-red-500 border-red-500/40 bg-red-500/10",
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(dateStr?: string | null): string | null {
   if (!dateStr) return null;
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -50,30 +50,15 @@ function timeAgo(dateStr?: string | null): string | null {
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
-// ── Avatar ──────────────────────────────────────────────────────────────────
 function Avatar({ name, color, size = 22 }: { name: string; color?: string | null; size?: number }) {
   return (
     <div title={name}
       style={{ width: size, height: size, backgroundColor: color ?? "#475569", fontSize: size * 0.45 }}
-      className="rounded-full flex items-center justify-center text-white font-bold shrink-0 ring-1 ring-white/20"
-    >
+      className="rounded-full flex items-center justify-center text-white font-bold shrink-0 ring-1 ring-white/20">
       {name.charAt(0).toUpperCase()}
-    </div>
-  );
-}
-
-function StarSelect({ value, onChange }: { value: number; onChange: (n: number) => void }) {
-  return (
-    <div className="flex gap-1">
-      {[1,2,3,4,5].map(n => (
-        <button key={n} type="button" onClick={() => onChange(n)}>
-          <Star size={14} className={n <= value ? "fill-amber-400 text-amber-400" : "fill-none text-muted-foreground/40"} />
-        </button>
-      ))}
     </div>
   );
 }
@@ -98,9 +83,7 @@ function DashToFinish({ kpis, milestoneId, msStatus }: { kpis: any[]; milestoneI
           <div key={k.id}>
             <div className="flex justify-between items-baseline mb-1">
               <span className="text-xs text-foreground font-medium">{k.name}</span>
-              <span className="text-xs tabular-nums" style={{ color: col.stroke }}>
-                {k.current} / {k.target} {k.unit}
-              </span>
+              <span className="text-xs tabular-nums" style={{ color: col.stroke }}>{k.current} / {k.target} {k.unit}</span>
             </div>
             <div className="h-2 rounded-full bg-white/5 overflow-hidden">
               <div className="h-full rounded-full transition-all duration-500"
@@ -115,48 +98,42 @@ function DashToFinish({ kpis, milestoneId, msStatus }: { kpis: any[]; milestoneI
 }
 
 // ── Task Card ────────────────────────────────────────────────────────────────
-function TaskCard({ task, players, colRing, colDot, onStatusChange, onAssignChange }: {
+function TaskCard({ task, players, colRing, colDot, onStatusChange, onAssignChange, taskCols }: {
   task: any; players: any[]; colRing: string; colDot: string;
   onStatusChange: (id: number, s: TaskStatus) => void;
   onAssignChange: (id: number, pid: number | null) => void;
+  taskCols: typeof TASK_COLS_DEF;
 }) {
   const assignee = players.find(p => p.id === task.assignedPlayerId);
   const ago = timeAgo(task.updatedAt);
+  const { t } = useLang();
 
   return (
     <div className="bg-background/60 border rounded-lg px-3 py-2.5 flex flex-col gap-1.5 hover:border-primary/40 transition-colors group"
       style={{ borderColor: colRing + "40" }}>
-      {/* Title + priority */}
       <div className="flex items-start justify-between gap-1">
         <span className="text-xs text-foreground leading-snug font-medium">{task.title}</span>
         {task.priority && (
           <span className={`text-[9px] px-1 py-0.5 rounded border uppercase font-bold shrink-0 ${PRIORITY_BADGE[task.priority as Priority] ?? ""}`}>
-            {task.priority}
+            {t[task.priority as Priority] ?? task.priority}
           </span>
         )}
       </div>
-      {/* KPI impact */}
       {task.status === "check" && task.kpiImpact && (
         <div className="flex items-center gap-1 text-[10px] text-primary bg-primary/10 border border-primary/20 rounded px-1.5 py-0.5">
           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping shrink-0" />
           {task.kpiImpact}
         </div>
       )}
-      {/* Footer: avatar + timestamp + status */}
       <div className="flex items-center justify-between mt-0.5 gap-1">
         <div className="flex items-center gap-1.5">
-          {/* Avatar picker */}
           <div className="relative group/avatar">
             {assignee
               ? <Avatar name={assignee.name} color={assignee.avatarColor} size={18} />
-              : (
-                <div className="w-[18px] h-[18px] rounded-full border border-dashed border-border flex items-center justify-center text-muted-foreground/40">
-                  <Plus size={7} />
-                </div>
-              )}
+              : <div className="w-[18px] h-[18px] rounded-full border border-dashed border-border flex items-center justify-center text-muted-foreground/40"><Plus size={7} /></div>}
             <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/avatar:flex flex-col bg-popover border border-border rounded-lg shadow-lg overflow-hidden min-w-[130px]">
               <button className="text-[10px] px-2 py-1.5 text-left hover:bg-muted transition-colors text-muted-foreground"
-                onClick={() => onAssignChange(task.id, null)}>Unassign</button>
+                onClick={() => onAssignChange(task.id, null)}>{t.unassigned}</button>
               {players.map(p => (
                 <button key={p.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted transition-colors"
                   onClick={() => onAssignChange(task.id, p.id)}>
@@ -170,14 +147,14 @@ function TaskCard({ task, players, colRing, colDot, onStatusChange, onAssignChan
         </div>
         <select value={task.status} onChange={e => onStatusChange(task.id, e.target.value as TaskStatus)}
           className="text-[10px] bg-transparent border-none text-muted-foreground focus:ring-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-          {TASK_COLS.map(c => <option key={c.id} value={c.id} className="bg-background">{c.label}</option>)}
+          {taskCols.map(c => <option key={c.id} value={c.id} className="bg-background">{t[c.labelKey as keyof typeof t] as string ?? c.labelKey}</option>)}
         </select>
       </div>
     </div>
   );
 }
 
-// ── Between-milestone Kanban (collapsed by default) ──────────────────────────
+// ── Between-milestone Kanban ──────────────────────────────────────────────────
 function BetweenKanban({ milestoneId, tasks, players, kpis, msStatus, msTitle, onStatusChange, onAssignChange, onAddTask }: {
   milestoneId: number; tasks: any[]; players: any[];
   kpis: any[]; msStatus: MilestoneStatus; msTitle: string;
@@ -188,10 +165,10 @@ function BetweenKanban({ milestoneId, tasks, players, kpis, msStatus, msTitle, o
   const [expanded, setExpanded] = useState(false);
   const msTasks = tasks.filter(t => t.milestoneId === milestoneId);
   const col = MS_COLORS[msStatus];
+  const { t } = useLang();
 
-  const countByStatus = (s: TaskStatus) => msTasks.filter(t => t.status === s).length;
+  const taskCols = TASK_COLS_DEF.map(tc => ({ ...tc, label: t[tc.labelKey as keyof typeof t] as string ?? tc.labelKey }));
 
-  // Connector line
   const Connector = ({ opacity = "60" }: { opacity?: string }) => (
     <div className="flex justify-center">
       <div className="h-6 w-px" style={{ background: `linear-gradient(to bottom, ${col.stroke}${opacity}, ${col.stroke}20)` }} />
@@ -204,7 +181,7 @@ function BetweenKanban({ milestoneId, tasks, players, kpis, msStatus, msTitle, o
         <Connector />
         <button onClick={() => onAddTask(milestoneId, "plan")}
           className="text-[10px] text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 py-1.5 px-3 rounded-full border border-dashed border-border/40 hover:border-primary/40">
-          <Plus size={9} /> Add first task for this milestone
+          <Plus size={9} /> {t.addFirstTask}
         </button>
         <Connector opacity="20" />
       </div>
@@ -214,24 +191,17 @@ function BetweenKanban({ milestoneId, tasks, players, kpis, msStatus, msTitle, o
   return (
     <div className="py-1">
       <Connector />
-
-      {/* Collapsed summary bar */}
-      <button
-        onClick={() => setExpanded(e => !e)}
+      <button onClick={() => setExpanded(e => !e)}
         className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all hover:border-primary/30"
-        style={{ borderColor: col.stroke + "25", background: expanded ? col.bg : "rgba(15,23,42,0.5)" }}
-      >
+        style={{ borderColor: col.stroke + "25", background: expanded ? col.bg : "rgba(15,23,42,0.5)" }}>
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           {expanded ? <ChevronDown size={12} style={{ color: col.stroke }} /> : <ChevronRight size={12} style={{ color: col.stroke }} />}
-          <span className="text-[10px] uppercase tracking-widest font-bold" style={{ color: col.stroke }}>
-            {msTitle}
-          </span>
-          <span className="text-[10px] text-muted-foreground ml-1">— {msTasks.length} tasks</span>
+          <span className="text-[10px] uppercase tracking-widest font-bold" style={{ color: col.stroke }}>{msTitle}</span>
+          <span className="text-[10px] text-muted-foreground ml-1">— {msTasks.length} {t.tasks.toLowerCase()}</span>
         </div>
-        {/* Mini status pills */}
         <div className="flex items-center gap-2 shrink-0">
-          {TASK_COLS.map(tc => {
-            const n = countByStatus(tc.id);
+          {taskCols.map(tc => {
+            const n = msTasks.filter(task => task.status === tc.id).length;
             if (n === 0) return null;
             return (
               <div key={tc.id} className="flex items-center gap-1">
@@ -243,14 +213,13 @@ function BetweenKanban({ milestoneId, tasks, players, kpis, msStatus, msTitle, o
         </div>
       </button>
 
-      {/* Expanded kanban */}
       {expanded && (
         <div className="mt-2">
           <div className="rounded-xl border overflow-hidden"
             style={{ borderColor: col.stroke + "25", background: "rgba(15,23,42,0.7)" }}>
             <div className="grid grid-cols-4 divide-x divide-border/20">
-              {TASK_COLS.map(tc => {
-                const colTasks = msTasks.filter(t => t.status === tc.id);
+              {taskCols.map(tc => {
+                const colTasks = msTasks.filter(task => task.status === tc.id);
                 return (
                   <div key={tc.id} className="flex flex-col min-h-[80px]">
                     <div className="flex items-center justify-between px-3 py-2 border-b border-border/30">
@@ -261,14 +230,14 @@ function BetweenKanban({ milestoneId, tasks, players, kpis, msStatus, msTitle, o
                       <span className="text-[10px] text-muted-foreground/60">{colTasks.length}</span>
                     </div>
                     <div className="flex flex-col gap-2 p-2 flex-1">
-                      {colTasks.map(t => (
-                        <TaskCard key={t.id} task={t} players={players}
-                          colRing={tc.ring} colDot={tc.dot}
+                      {colTasks.map(task => (
+                        <TaskCard key={task.id} task={task} players={players}
+                          colRing={tc.ring} colDot={tc.dot} taskCols={TASK_COLS_DEF}
                           onStatusChange={onStatusChange} onAssignChange={onAssignChange} />
                       ))}
                       <button onClick={() => onAddTask(milestoneId, tc.id)}
                         className="flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors py-1 px-1 rounded">
-                        <Plus size={9} /> Add
+                        <Plus size={9} /> {t.addTask}
                       </button>
                     </div>
                   </div>
@@ -276,83 +245,66 @@ function BetweenKanban({ milestoneId, tasks, players, kpis, msStatus, msTitle, o
               })}
             </div>
           </div>
-
-          {/* Dash to Finish Line */}
           <DashToFinish kpis={kpis} milestoneId={milestoneId} msStatus={msStatus} />
         </div>
       )}
-
       <Connector opacity="20" />
     </div>
   );
 }
 
-// ── Milestone Edit Panel ─────────────────────────────────────────────────────
+// ── Milestone Edit Panel ──────────────────────────────────────────────────────
 function MilestoneEditPanel({ m, tasks, kpis, onSave, onCreateKpi, onAddTask }: {
   m: any; tasks: any[]; kpis: any[];
   onSave: (id: number, data: any) => void;
   onCreateKpi: (milestoneId: number) => void;
   onAddTask: (milestoneId: number) => void;
 }) {
+  const { t } = useLang();
   const col = MS_COLORS[m.status as MilestoneStatus] ?? MS_COLORS.planted;
-  const mTasks = tasks.filter(t => t.milestoneId === m.id);
+  const mTasks = tasks.filter(task => task.milestoneId === m.id);
   const linkedKpis = kpis.filter(k => k.milestoneId === m.id);
-  const done = mTasks.filter(t => t.status === "next_plan").length;
+  const done = mTasks.filter(task => task.status === "next_plan").length;
 
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ title: m.title, description: m.description ?? "", starsValue: m.starsValue, targetDate: m.targetDate ?? "", status: m.status as MilestoneStatus });
+  const [draft, setDraft] = useState({ title: m.title, description: m.description ?? "", targetDate: m.targetDate ?? "", status: m.status as MilestoneStatus });
 
-  const handleSave = () => {
-    onSave(m.id, draft);
-    setEditing(false);
+  const handleSave = () => { onSave(m.id, draft); setEditing(false); };
+
+  const msLabels: Record<MilestoneStatus, string> = {
+    planted: t.planted, growing: t.growing, blooming: t.blooming, harvested: t.harvested,
   };
 
   return (
     <div className="mt-2 mb-1 ml-16 mr-0 rounded-xl border border-border/40 bg-card/50 backdrop-blur p-4 flex flex-col gap-4">
-      {/* Header */}
       <div className="flex items-start justify-between">
-        {editing ? (
-          <Input value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
-            className="h-8 text-sm font-serif font-bold w-full mr-2" />
-        ) : (
-          <h3 className="font-serif font-bold text-sm text-foreground leading-snug">{m.title}</h3>
-        )}
+        {editing
+          ? <Input value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))} className="h-8 text-sm font-serif font-bold w-full mr-2" />
+          : <h3 className="font-serif font-bold text-sm text-foreground leading-snug">{m.title}</h3>}
         <button onClick={() => editing ? handleSave() : setEditing(true)}
           className="shrink-0 ml-2 p-1.5 rounded-lg border border-border/40 hover:border-primary/40 text-muted-foreground hover:text-primary transition-colors">
           {editing ? <Check size={13} /> : <Pencil size={13} />}
         </button>
       </div>
 
-      {/* Description */}
-      {editing ? (
-        <Textarea value={draft.description} onChange={e => setDraft(d => ({ ...d, description: e.target.value }))}
-          placeholder="Describe this milestone..." className="text-xs min-h-[60px]" />
-      ) : (
-        m.description && <p className="text-xs text-muted-foreground">{m.description}</p>
-      )}
+      {editing
+        ? <Textarea value={draft.description} onChange={e => setDraft(d => ({ ...d, description: e.target.value }))} placeholder={t.milestoneDesc} className="text-xs min-h-[60px]" />
+        : m.description && <p className="text-xs text-muted-foreground">{m.description}</p>}
 
-      {/* Stars + Date + Status row */}
       <div className="flex flex-wrap items-center gap-3">
         {editing ? (
           <>
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Stars</span>
-              <StarSelect value={draft.starsValue} onChange={n => setDraft(d => ({ ...d, starsValue: n }))} />
+              <span className="text-[10px] text-muted-foreground uppercase tracking-widest">{t.milestoneDate}</span>
+              <Input type="date" value={draft.targetDate} onChange={e => setDraft(d => ({ ...d, targetDate: e.target.value }))} className="h-7 text-xs w-36" />
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Target Date</span>
-              <Input type="date" value={draft.targetDate} onChange={e => setDraft(d => ({ ...d, targetDate: e.target.value }))}
-                className="h-7 text-xs w-36" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Status</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-widest">{t.status}</span>
               <Select value={draft.status} onValueChange={v => setDraft(d => ({ ...d, status: v as MilestoneStatus }))}>
-                <SelectTrigger className="h-7 text-xs w-28" style={{ borderColor: col.stroke + "60", color: col.stroke }}>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="h-7 text-xs w-28" style={{ borderColor: col.stroke + "60", color: col.stroke }}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {(["planted","growing","blooming","harvested"] as MilestoneStatus[]).map(s => (
-                    <SelectItem key={s} value={s}>{MS_COLORS[s].label}</SelectItem>
+                    <SelectItem key={s} value={s}>{msLabels[s]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -360,64 +312,52 @@ function MilestoneEditPanel({ m, tasks, kpis, onSave, onCreateKpi, onAddTask }: 
           </>
         ) : (
           <>
-            <div className="flex gap-0.5">
-              {[1,2,3,4,5].map(i => (
-                <Star key={i} size={10} className={i <= m.starsValue ? "fill-amber-400 text-amber-400" : "fill-none text-muted-foreground/20"} />
-              ))}
-            </div>
-            {m.targetDate && <span className="text-xs text-muted-foreground">{m.targetDate}</span>}
+            {m.targetDate && <span className="text-sm font-medium text-foreground/70">{m.targetDate}</span>}
             <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border"
-              style={{ color: col.stroke, borderColor: col.stroke + "40" }}>{col.label}</span>
+              style={{ color: col.stroke, borderColor: col.stroke + "40" }}>{msLabels[m.status as MilestoneStatus]}</span>
           </>
         )}
       </div>
 
-      {/* Task progress */}
       {mTasks.length > 0 && (
         <div>
           <div className="flex justify-between text-[10px] text-muted-foreground mb-1.5">
-            <span>Tasks</span><span>{done}/{mTasks.length} done</span>
+            <span>{t.tasks}</span><span>{t.tasks_done(done, mTasks.length)}</span>
           </div>
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${mTasks.length > 0 ? (done/mTasks.length)*100 : 0}%`, background: col.stroke }} />
+            <div className="h-full rounded-full transition-all" style={{ width: `${(done/mTasks.length)*100}%`, background: col.stroke }} />
           </div>
         </div>
       )}
 
-      {/* Linked KPIs */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">KPIs for this Milestone</span>
-          <button onClick={() => onCreateKpi(m.id)}
-            className="flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors">
-            <Plus size={9} /> Add KPI
+          <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{t.kpisForMilestone}</span>
+          <button onClick={() => onCreateKpi(m.id)} className="flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors">
+            <Plus size={9} /> {t.addKpi}
           </button>
         </div>
-        {linkedKpis.length === 0 ? (
-          <p className="text-[10px] text-muted-foreground/50 italic">No KPIs linked yet. Add one to track progress.</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {linkedKpis.map(k => {
-              const pct = k.target > 0 ? Math.min(100, Math.round((k.current/k.target)*100)) : 0;
-              return (
-                <div key={k.id} className="flex items-center gap-2">
-                  <span className="text-[10px] text-foreground flex-1 truncate">{k.name}</span>
-                  <span className="text-[10px] tabular-nums" style={{ color: col.stroke }}>{k.current}/{k.target} {k.unit}</span>
-                  <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden shrink-0">
-                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: col.stroke }} />
+        {linkedKpis.length === 0
+          ? <p className="text-[10px] text-muted-foreground/50 italic">{t.noKpisLinked}</p>
+          : <div className="flex flex-col gap-2">
+              {linkedKpis.map(k => {
+                const pct = k.target > 0 ? Math.min(100, Math.round((k.current/k.target)*100)) : 0;
+                return (
+                  <div key={k.id} className="flex items-center gap-2">
+                    <span className="text-[10px] text-foreground flex-1 truncate">{k.name}</span>
+                    <span className="text-[10px] tabular-nums" style={{ color: col.stroke }}>{k.current}/{k.target} {k.unit}</span>
+                    <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden shrink-0">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: col.stroke }} />
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>}
       </div>
 
-      {/* Actions */}
       <div className="flex gap-2 pt-1 border-t border-border/30">
-        <button onClick={() => onAddTask(m.id)}
-          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
-          <Plus size={9} /> Add Task
+        <button onClick={() => onAddTask(m.id)} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+          <Plus size={9} /> {t.addTask}
         </button>
       </div>
     </div>
@@ -425,60 +365,59 @@ function MilestoneEditPanel({ m, tasks, kpis, onSave, onCreateKpi, onAddTask }: 
 }
 
 // ── Milestone Node ────────────────────────────────────────────────────────────
-function MilestoneNode({ m, index, tasks, isSelected, onClick, onAddTask }: {
-  m: any; index: number; tasks: any[];
+function MilestoneNode({ m, stepNumber, tasks, isSelected, onClick }: {
+  m: any; stepNumber: number; tasks: any[];
   isSelected: boolean; onClick: () => void;
-  onAddTask: (id: number) => void;
 }) {
   const col = MS_COLORS[m.status as MilestoneStatus] ?? MS_COLORS.planted;
-  const mTasks = tasks.filter(t => t.milestoneId === m.id);
-  const done = mTasks.filter(t => t.status === "next_plan").length;
+  const mTasks = tasks.filter(task => task.milestoneId === m.id);
+  const done = mTasks.filter(task => task.status === "next_plan").length;
   const pct = mTasks.length > 0 ? Math.round((done / mTasks.length) * 100) : 0;
 
   return (
-    <div className="flex flex-col items-center cursor-pointer group" onClick={onClick}>
-      <div className="flex items-center gap-4 w-full">
-        {/* Left: stars + date */}
-        <div className="flex-1 text-right min-w-0">
-          <div className="flex items-center justify-end gap-0.5 mb-0.5">
-            {[1,2,3,4,5].map(i => (
-              <Star key={i} size={9} className={i <= m.starsValue ? "fill-amber-400 text-amber-400" : "fill-none text-muted-foreground/20"} />
-            ))}
-          </div>
-          {m.targetDate && <p className="text-[10px] text-muted-foreground">{m.targetDate}</p>}
-        </div>
+    <div className="flex items-center gap-4 w-full cursor-pointer group" onClick={onClick}>
+      {/* Left: date (large) */}
+      <div className="flex-1 text-right min-w-0">
+        {m.targetDate
+          ? <p className="text-lg font-bold tabular-nums text-foreground/70 leading-tight">{m.targetDate}</p>
+          : <p className="text-sm text-muted-foreground/30">—</p>}
+      </div>
 
-        {/* Node */}
-        <div className="relative shrink-0">
-          <div className="absolute inset-0 rounded-full blur-md opacity-50 group-hover:opacity-80 transition-opacity"
-            style={{ background: col.stroke, transform: "scale(1.4)" }} />
-          <svg width="56" height="56" className="relative z-10" style={{ transform: "rotate(-90deg)" }}>
-            <circle cx="28" cy="28" r="24" fill={isSelected ? col.fill : "#0f172a"}
-              stroke={isSelected ? col.stroke : col.stroke + "80"} strokeWidth={isSelected ? 2.5 : 1.5} />
-            {pct > 0 && (
-              <circle cx="28" cy="28" r="24" fill="none" stroke={col.stroke} strokeWidth="3"
-                strokeDasharray={`${(pct/100)*2*Math.PI*24} ${2*Math.PI*24}`} strokeLinecap="round" />
-            )}
-          </svg>
-          <div className="absolute inset-0 flex items-center justify-center z-10">
-            <Flag size={15} style={{ color: col.stroke }} />
-          </div>
-          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[9px] font-bold px-1.5 py-0.5 rounded-full border z-20"
-            style={{ color: col.stroke, borderColor: col.stroke + "50", background: "#0f172a" }}>
-            {String(index + 1).padStart(2, "0")}
-          </div>
+      {/* Node */}
+      <div className="relative shrink-0">
+        <div className="absolute inset-0 rounded-full blur-md opacity-50 group-hover:opacity-80 transition-opacity"
+          style={{ background: col.stroke, transform: "scale(1.4)" }} />
+        <svg width="56" height="56" className="relative z-10" style={{ transform: "rotate(-90deg)" }}>
+          <circle cx="28" cy="28" r="24"
+            fill={isSelected ? col.fill : "#0f172a"}
+            stroke={isSelected ? col.stroke : col.stroke + "80"}
+            strokeWidth={isSelected ? 2.5 : 1.5} />
+          {pct > 0 && (
+            <circle cx="28" cy="28" r="24" fill="none" stroke={col.stroke} strokeWidth="3"
+              strokeDasharray={`${(pct/100)*2*Math.PI*24} ${2*Math.PI*24}`} strokeLinecap="round" />
+          )}
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center z-10">
+          <Flag size={15} style={{ color: col.stroke }} />
         </div>
+        {/* Step badge */}
+        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[9px] font-bold px-1.5 py-0.5 rounded-full border z-20"
+          style={{ color: col.stroke, borderColor: col.stroke + "50", background: "#0f172a" }}>
+          {String(stepNumber).padStart(2, "0")}
+        </div>
+      </div>
 
-        {/* Right: title + status */}
-        <div className="flex-1 min-w-0">
-          <h3 className="font-serif font-bold text-sm leading-tight text-foreground truncate group-hover:text-primary transition-colors" title={m.title}>
-            {m.title}
-          </h3>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border"
-              style={{ color: col.stroke, borderColor: col.stroke + "40" }}>{col.label}</span>
-            {mTasks.length > 0 && <span className="text-[10px] text-muted-foreground">{done}/{mTasks.length}</span>}
-          </div>
+      {/* Right: title + status */}
+      <div className="flex-1 min-w-0">
+        <h3 className="font-serif font-bold text-sm leading-tight text-foreground truncate group-hover:text-primary transition-colors" title={m.title}>
+          {m.title}
+        </h3>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border"
+            style={{ color: col.stroke, borderColor: col.stroke + "40" }}>
+            {({ planted: col.labelKey, growing: col.labelKey, blooming: col.labelKey, harvested: col.labelKey } as any)[m.status]}
+          </span>
+          {mTasks.length > 0 && <span className="text-[10px] text-muted-foreground">{done}/{mTasks.length}</span>}
         </div>
       </div>
     </div>
@@ -491,6 +430,7 @@ export default function Roadmap() {
   const [, altParams] = useRoute("/game/:gameId");
   const gameId = Number(params?.gameId ?? altParams?.gameId);
   const queryClient = useQueryClient();
+  const { t } = useLang();
 
   const { data: milestones = [] } = useListMilestones(gameId, { query: { enabled: !!gameId, queryKey: getListMilestonesQueryKey(gameId) } });
   const { data: tasks = [] }      = useListTasks(gameId,      { query: { enabled: !!gameId, queryKey: getListTasksQueryKey(gameId) } });
@@ -508,9 +448,13 @@ export default function Roadmap() {
   const [newTaskContext,      setNewTaskContext]       = useState<{ milestoneId: number; status: TaskStatus } | null>(null);
   const [newKpiMilestoneId,   setNewKpiMilestoneId]   = useState<number | null>(null);
 
-  const [mForm, setMForm]     = useState({ title: "", description: "", starsValue: "3", targetDate: "" });
+  const [mForm, setMForm]     = useState({ title: "", description: "", targetDate: "" });
   const [tForm, setTForm]     = useState({ title: "", description: "", priority: "medium", kpiImpact: "none", assignedPlayerId: "none" });
   const [kpiForm, setKpiForm] = useState({ name: "", unit: "units", target: "100", description: "" });
+
+  const msLabels: Record<MilestoneStatus, string> = {
+    planted: t.planted, growing: t.growing, blooming: t.blooming, harvested: t.harvested,
+  };
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListMilestonesQueryKey(gameId) });
@@ -521,8 +465,8 @@ export default function Roadmap() {
   const handleCreateMilestone = () => {
     if (!mForm.title.trim()) return;
     createMilestone.mutate(
-      { gameId, data: { title: mForm.title, description: mForm.description, starsValue: Number(mForm.starsValue), targetDate: mForm.targetDate || undefined } },
-      { onSuccess: () => { setNewMilestoneOpen(false); setMForm({ title: "", description: "", starsValue: "3", targetDate: "" }); invalidate(); } }
+      { gameId, data: { title: mForm.title, description: mForm.description, starsValue: 3, targetDate: mForm.targetDate || undefined } },
+      { onSuccess: () => { setNewMilestoneOpen(false); setMForm({ title: "", description: "", targetDate: "" }); invalidate(); } }
     );
   };
 
@@ -531,8 +475,7 @@ export default function Roadmap() {
     createTask.mutate(
       { gameId, data: {
         title: tForm.title, description: tForm.description,
-        priority: tForm.priority as Priority,
-        status: newTaskContext.status,
+        priority: tForm.priority as Priority, status: newTaskContext.status,
         milestoneId: newTaskContext.milestoneId,
         kpiImpact: tForm.kpiImpact !== "none" ? tForm.kpiImpact : undefined,
         assignedPlayerId: tForm.assignedPlayerId !== "none" ? Number(tForm.assignedPlayerId) : undefined,
@@ -561,7 +504,10 @@ export default function Roadmap() {
     updateTask.mutate({ gameId, taskId, data: { assignedPlayerId: playerId } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListTasksQueryKey(gameId) }) });
   };
 
-  const unlinkedTasks = tasks.filter(t => !t.milestoneId);
+  // Reversed so highest-numbered milestone is at TOP, milestone 01 (launch pad) at BOTTOM
+  const displayMilestones = [...milestones].reverse();
+  const total = milestones.length;
+  const unlinkedTasks = tasks.filter(task => !task.milestoneId);
 
   return (
     <GameLayout>
@@ -580,69 +526,70 @@ export default function Roadmap() {
           {/* Header */}
           <div className="flex items-center justify-between mb-10">
             <div>
-              <h1 className="text-2xl font-serif text-amber-400 font-bold tracking-wide">Roadmap</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">{milestones.length} milestones · {tasks.length} tasks</p>
+              <h1 className="text-2xl font-serif text-amber-400 font-bold tracking-wide">{t.roadmap}</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">{t.roadmapSubtitle(milestones.length, tasks.length)}</p>
             </div>
             <Button size="sm" onClick={() => setNewMilestoneOpen(true)} className="gap-1.5">
-              <Plus size={14} /> Milestone
+              <Plus size={14} /> {t.addMilestone}
             </Button>
           </div>
 
           {milestones.length === 0 ? (
             <div className="flex flex-col items-center py-32 text-muted-foreground">
               <Flag size={36} className="mb-4 text-primary/20" />
-              <p className="text-lg">No milestones yet.</p>
-              <Button className="mt-6 gap-2" onClick={() => setNewMilestoneOpen(true)}><Plus size={14} /> Plant First Milestone</Button>
+              <p className="text-lg">{t.noMilestones}</p>
+              <Button className="mt-6 gap-2" onClick={() => setNewMilestoneOpen(true)}><Plus size={14} /> {t.plantFirst}</Button>
             </div>
           ) : (
             <div className="flex flex-col">
-              {milestones.map((m, i) => (
-                <div key={m.id}>
-                  <MilestoneNode
-                    m={m} index={i} tasks={tasks}
-                    isSelected={selectedMilestoneId === m.id}
-                    onClick={() => setSelectedMilestoneId(selectedMilestoneId === m.id ? null : m.id)}
-                    onAddTask={id => setNewTaskContext({ milestoneId: id, status: "plan" })}
-                  />
-
-                  {/* Edit panel */}
-                  {selectedMilestoneId === m.id && (
-                    <MilestoneEditPanel
-                      m={m} tasks={tasks} kpis={kpis}
-                      onSave={handleMilestoneSave}
-                      onCreateKpi={id => { setNewKpiMilestoneId(id); }}
-                      onAddTask={id => setNewTaskContext({ milestoneId: id, status: "plan" })}
+              {displayMilestones.map((m, displayIdx) => {
+                // stepNumber: highest = total (top), lowest = 1 (bottom)
+                const stepNumber = total - displayIdx;
+                return (
+                  <div key={m.id}>
+                    <MilestoneNode
+                      m={m} stepNumber={stepNumber} tasks={tasks}
+                      isSelected={selectedMilestoneId === m.id}
+                      onClick={() => setSelectedMilestoneId(selectedMilestoneId === m.id ? null : m.id)}
                     />
-                  )}
 
-                  {/* Between-milestone kanban */}
-                  <BetweenKanban
-                    milestoneId={m.id} tasks={tasks} players={players} kpis={kpis}
-                    msStatus={m.status as MilestoneStatus} msTitle={m.title}
-                    onStatusChange={handleStatusChange}
-                    onAssignChange={handleAssignChange}
-                    onAddTask={(mid, status) => setNewTaskContext({ milestoneId: mid, status })}
-                  />
+                    {selectedMilestoneId === m.id && (
+                      <MilestoneEditPanel
+                        m={m} tasks={tasks} kpis={kpis}
+                        onSave={handleMilestoneSave}
+                        onCreateKpi={id => setNewKpiMilestoneId(id)}
+                        onAddTask={id => setNewTaskContext({ milestoneId: id, status: "plan" })}
+                      />
+                    )}
 
-                  {i < milestones.length - 1 && (
-                    <div className="flex justify-center -my-1">
-                      <div className="flex flex-col items-center gap-0.5">
-                        {[0,1,2].map(j => <div key={j} className="w-1 h-1 rounded-full bg-primary/20" />)}
+                    <BetweenKanban
+                      milestoneId={m.id} tasks={tasks} players={players} kpis={kpis}
+                      msStatus={m.status as MilestoneStatus} msTitle={m.title}
+                      onStatusChange={handleStatusChange}
+                      onAssignChange={handleAssignChange}
+                      onAddTask={(mid, status) => setNewTaskContext({ milestoneId: mid, status })}
+                    />
+
+                    {displayIdx < displayMilestones.length - 1 && (
+                      <div className="flex justify-center -my-1">
+                        <div className="flex flex-col items-center gap-0.5">
+                          {[0,1,2].map(j => <div key={j} className="w-1 h-1 rounded-full bg-primary/20" />)}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                    )}
+                  </div>
+                );
+              })}
 
-              {/* Unlinked tasks */}
               {unlinkedTasks.length > 0 && (
                 <div className="mt-8 border border-border/40 rounded-xl bg-card/40 p-4">
-                  <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold mb-3">Backlog — Unassigned</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold mb-3">{t.backlog}</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {unlinkedTasks.map(t => {
-                      const tc = TASK_COLS.find(c => c.id === t.status) ?? TASK_COLS[0];
+                    {unlinkedTasks.map(task => {
+                      const tc = TASK_COLS_DEF.find(c => c.id === task.status) ?? TASK_COLS_DEF[0];
                       return (
-                        <TaskCard key={t.id} task={t} players={players} colRing={tc.ring} colDot={tc.dot}
+                        <TaskCard key={task.id} task={task} players={players}
+                          colRing={tc.ring} colDot={tc.dot} taskCols={TASK_COLS_DEF}
                           onStatusChange={handleStatusChange} onAssignChange={handleAssignChange} />
                       );
                     })}
@@ -657,29 +604,22 @@ export default function Roadmap() {
       {/* ── New Milestone Dialog ── */}
       <Dialog open={newMilestoneOpen} onOpenChange={setNewMilestoneOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Plant a Milestone</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t.plantMilestone}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><Label>Title</Label>
-              <Input value={mForm.title} onChange={e => setMForm(f => ({ ...f, title: e.target.value }))} placeholder="What landmark will you reach?" />
+            <div><Label>{t.milestoneTitle}</Label>
+              <Input value={mForm.title} onChange={e => setMForm(f => ({ ...f, title: e.target.value }))}
+                placeholder={t.milestoneTitlePlaceholder} autoFocus />
             </div>
-            <div><Label>Description</Label>
+            <div><Label>{t.milestoneDesc}</Label>
               <Textarea value={mForm.description} onChange={e => setMForm(f => ({ ...f, description: e.target.value }))} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Stars Value</Label>
-                <Select value={mForm.starsValue} onValueChange={v => setMForm(f => ({ ...f, starsValue: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{[1,2,3,4,5].map(n => <SelectItem key={n} value={String(n)}>{n} stars</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div><Label>Target Date</Label>
-                <Input type="date" value={mForm.targetDate} onChange={e => setMForm(f => ({ ...f, targetDate: e.target.value }))} />
-              </div>
+            <div><Label>{t.milestoneDate}</Label>
+              <Input type="date" value={mForm.targetDate} onChange={e => setMForm(f => ({ ...f, targetDate: e.target.value }))} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNewMilestoneOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateMilestone} disabled={createMilestone.isPending}>Plant Milestone</Button>
+            <Button variant="outline" onClick={() => setNewMilestoneOpen(false)}>{t.cancel}</Button>
+            <Button onClick={handleCreateMilestone} disabled={createMilestone.isPending}>{t.plantMilestone}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -688,37 +628,37 @@ export default function Roadmap() {
       <Dialog open={newTaskContext !== null} onOpenChange={open => !open && setNewTaskContext(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add a Task</DialogTitle>
+            <DialogTitle>{t.addTaskTitle}</DialogTitle>
             {newTaskContext && (
               <p className="text-xs text-muted-foreground mt-1">
-                {milestones.find(m => m.id === newTaskContext.milestoneId)?.title} → {TASK_COLS.find(c => c.id === newTaskContext.status)?.label}
+                {milestones.find(m => m.id === newTaskContext.milestoneId)?.title} → {t[TASK_COLS_DEF.find(c => c.id === newTaskContext.status)?.labelKey as keyof typeof t] as string}
               </p>
             )}
           </DialogHeader>
           <div className="space-y-4">
-            <div><Label>Title</Label>
-              <Input value={tForm.title} onChange={e => setTForm(f => ({ ...f, title: e.target.value }))} placeholder="What needs to be done?" autoFocus />
+            <div><Label>{t.taskTitle}</Label>
+              <Input value={tForm.title} onChange={e => setTForm(f => ({ ...f, title: e.target.value }))} placeholder={t.taskTitlePlaceholder} autoFocus />
             </div>
-            <div><Label>Description</Label>
+            <div><Label>{t.taskDesc}</Label>
               <Textarea value={tForm.description} onChange={e => setTForm(f => ({ ...f, description: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Priority</Label>
+              <div><Label>{t.priority}</Label>
                 <Select value={tForm.priority} onValueChange={v => setTForm(f => ({ ...f, priority: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
+                    <SelectItem value="low">{t.low}</SelectItem>
+                    <SelectItem value="medium">{t.medium}</SelectItem>
+                    <SelectItem value="high">{t.high}</SelectItem>
+                    <SelectItem value="critical">{t.critical}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Stakeholder</Label>
+              <div><Label>{t.stakeholder}</Label>
                 <Select value={tForm.assignedPlayerId} onValueChange={v => setTForm(f => ({ ...f, assignedPlayerId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Assign to..." /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t.unassigned} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Unassigned</SelectItem>
+                    <SelectItem value="none">{t.unassigned}</SelectItem>
                     {players.map(p => (
                       <SelectItem key={p.id} value={String(p.id)}>
                         <span className="flex items-center gap-2">
@@ -732,11 +672,11 @@ export default function Roadmap() {
               </div>
             </div>
             {kpis.length > 0 && (
-              <div><Label>KPI Impact</Label>
+              <div><Label>{t.kpiImpact}</Label>
                 <Select value={tForm.kpiImpact} onValueChange={v => setTForm(f => ({ ...f, kpiImpact: v }))}>
-                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t.noneKpi} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="none">{t.noneKpi}</SelectItem>
                     {kpis.map(k => <SelectItem key={k.id} value={k.name}>{k.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -744,8 +684,8 @@ export default function Roadmap() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNewTaskContext(null)}>Cancel</Button>
-            <Button onClick={handleCreateTask} disabled={createTask.isPending}>Add Task</Button>
+            <Button variant="outline" onClick={() => setNewTaskContext(null)}>{t.cancel}</Button>
+            <Button onClick={handleCreateTask} disabled={createTask.isPending}>{t.addTask}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -754,34 +694,30 @@ export default function Roadmap() {
       <Dialog open={newKpiMilestoneId !== null} onOpenChange={open => !open && setNewKpiMilestoneId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add KPI to Milestone</DialogTitle>
+            <DialogTitle>{t.addKpiToMilestone}</DialogTitle>
             {newKpiMilestoneId && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {milestones.find(m => m.id === newKpiMilestoneId)?.title}
-              </p>
+              <p className="text-xs text-muted-foreground mt-1">{milestones.find(m => m.id === newKpiMilestoneId)?.title}</p>
             )}
           </DialogHeader>
           <div className="space-y-4">
-            <div><Label>KPI Name</Label>
-              <Input value={kpiForm.name} onChange={e => setKpiForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. Monthly Active Users" autoFocus />
+            <div><Label>{t.kpiName}</Label>
+              <Input value={kpiForm.name} onChange={e => setKpiForm(f => ({ ...f, name: e.target.value }))} placeholder={t.kpiNamePlaceholder} autoFocus />
             </div>
-            <div><Label>Description</Label>
+            <div><Label>{t.milestoneDesc}</Label>
               <Textarea value={kpiForm.description} onChange={e => setKpiForm(f => ({ ...f, description: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Unit</Label>
-                <Input value={kpiForm.unit} onChange={e => setKpiForm(f => ({ ...f, unit: e.target.value }))}
-                  placeholder="users, $, %" />
+              <div><Label>{t.kpiUnit}</Label>
+                <Input value={kpiForm.unit} onChange={e => setKpiForm(f => ({ ...f, unit: e.target.value }))} placeholder="users, $, %" />
               </div>
-              <div><Label>Target</Label>
+              <div><Label>{t.kpiTarget}</Label>
                 <Input type="number" value={kpiForm.target} onChange={e => setKpiForm(f => ({ ...f, target: e.target.value }))} />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNewKpiMilestoneId(null)}>Cancel</Button>
-            <Button onClick={handleCreateKpi} disabled={createKpi.isPending}>Create KPI</Button>
+            <Button variant="outline" onClick={() => setNewKpiMilestoneId(null)}>{t.cancel}</Button>
+            <Button onClick={handleCreateKpi} disabled={createKpi.isPending}>{t.createKpi}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
