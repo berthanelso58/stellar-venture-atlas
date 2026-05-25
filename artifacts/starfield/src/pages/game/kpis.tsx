@@ -173,7 +173,7 @@ export default function Kpis() {
                   <Select value={form.milestoneId} onValueChange={v => setForm(f => ({ ...f, milestoneId: v }))}>
                     <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {milestones.map(m => <SelectItem key={m.id} value={String(m.id)}>{m.title}</SelectItem>)}
                     </SelectContent>
                   </Select>
