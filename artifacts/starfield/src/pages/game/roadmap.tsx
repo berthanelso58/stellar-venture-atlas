@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useRoute } from "wouter";
 import {
-  useListMilestones, useListTasks, useListKpis,
+  useListMilestones, useListTasks, useListKpis, useListPlayers,
   useCreateMilestone, useUpdateMilestone,
   useCreateTask, useUpdateTask,
-  getListMilestonesQueryKey, getListTasksQueryKey,
+  getListMilestonesQueryKey, getListTasksQueryKey, getListKpisQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -13,496 +13,574 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Star, X, ChevronRight } from "lucide-react";
+import { Plus, Star, Flag, Zap } from "lucide-react";
 import GameLayout from "./layout";
 
 type MilestoneStatus = "planted" | "growing" | "blooming" | "harvested";
 type TaskStatus = "plan" | "doing" | "check" | "next_plan";
 type Priority = "low" | "medium" | "high" | "critical";
 
-const MILESTONE_COLORS: Record<MilestoneStatus, { fill: string; stroke: string; glow: string; label: string }> = {
-  planted:  { fill: "#1e293b", stroke: "#64748b", glow: "#64748b40", label: "Planted" },
-  growing:  { fill: "#052e16", stroke: "#4ade80", glow: "#4ade8040", label: "Growing" },
-  blooming: { fill: "#451a03", stroke: "#fb923c", glow: "#fb923c50", label: "Blooming" },
-  harvested:{ fill: "#2e1065", stroke: "#a78bfa", glow: "#a78bfa50", label: "Harvested" },
+const MS_COLORS: Record<MilestoneStatus, { stroke: string; fill: string; bg: string; label: string }> = {
+  planted:  { stroke: "#64748b", fill: "#1e293b", bg: "rgba(100,116,139,0.08)", label: "Planted" },
+  growing:  { stroke: "#4ade80", fill: "#052e16", bg: "rgba(74,222,128,0.08)",  label: "Growing" },
+  blooming: { stroke: "#fb923c", fill: "#451a03", bg: "rgba(251,146,60,0.08)",  label: "Blooming" },
+  harvested:{ stroke: "#a78bfa", fill: "#2e1065", bg: "rgba(167,139,250,0.10)", label: "Harvested" },
 };
 
-const TASK_COLORS: Record<TaskStatus, { dot: string; ring: string; label: string }> = {
-  plan:      { dot: "#475569", ring: "#64748b", label: "Plan" },
-  doing:     { dot: "#d97706", ring: "#fbbf24", label: "Doing" },
-  check:     { dot: "#2563eb", ring: "#60a5fa", label: "Check" },
-  next_plan: { dot: "#16a34a", ring: "#4ade80", label: "Done" },
+const TASK_COLS: { id: TaskStatus; label: string; dot: string; ring: string }[] = [
+  { id: "plan",      label: "Plan",      dot: "#475569", ring: "#64748b" },
+  { id: "doing",     label: "Doing",     dot: "#d97706", ring: "#fbbf24" },
+  { id: "check",     label: "Check",     dot: "#2563eb", ring: "#60a5fa" },
+  { id: "next_plan", label: "Done",      dot: "#16a34a", ring: "#4ade80" },
+];
+
+const PRIORITY_BADGE: Record<Priority, string> = {
+  low:      "text-blue-400 border-blue-400/30 bg-blue-400/10",
+  medium:   "text-amber-400 border-amber-400/30 bg-amber-400/10",
+  high:     "text-orange-400 border-orange-400/30 bg-orange-400/10",
+  critical: "text-red-500 border-red-500/40 bg-red-500/10",
 };
 
-const PRIORITY_COLORS: Record<Priority, string> = {
-  low: "#60a5fa", medium: "#fbbf24", high: "#f97316", critical: "#ef4444",
-};
-
-function StarRating({ value }: { value: number }) {
+// ── Avatar ──────────────────────────────────────────────────────────────────
+function Avatar({ name, color, size = 22 }: { name: string; color?: string | null; size?: number }) {
   return (
-    <span className="flex gap-0.5">
-      {[1,2,3,4,5].map(i => (
-        <Star key={i} size={10} className={i <= value ? "fill-amber-400 text-amber-400" : "fill-none text-muted-foreground/30"} />
-      ))}
-    </span>
+    <div
+      title={name}
+      style={{ width: size, height: size, backgroundColor: color ?? "#475569", fontSize: size * 0.45 }}
+      className="rounded-full flex items-center justify-center text-white font-bold shrink-0 ring-1 ring-white/20"
+    >
+      {name.charAt(0).toUpperCase()}
+    </div>
   );
 }
 
+// ── Dash to the Finish Line ──────────────────────────────────────────────────
+function DashToFinish({ kpis, milestoneId, msStatus }: { kpis: any[]; milestoneId: number; msStatus: MilestoneStatus }) {
+  const linked = kpis.filter(k => k.milestoneId === milestoneId);
+  if (linked.length === 0) return null;
+  const col = MS_COLORS[msStatus];
+
+  return (
+    <div
+      className="rounded-xl border px-4 py-3 mt-3 flex flex-col gap-2"
+      style={{ borderColor: col.stroke + "40", background: col.bg, boxShadow: `0 0 18px 2px ${col.stroke}22` }}
+    >
+      <div className="flex items-center gap-2 mb-0.5">
+        <Zap size={12} style={{ color: col.stroke }} />
+        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: col.stroke }}>
+          Dash to the Finish Line
+        </span>
+      </div>
+      {linked.map(k => {
+        const pct = k.target > 0 ? Math.min(100, Math.round((k.current / k.target) * 100)) : 0;
+        return (
+          <div key={k.id}>
+            <div className="flex justify-between items-baseline mb-1">
+              <span className="text-xs text-foreground font-medium">{k.name}</span>
+              <span className="text-xs tabular-nums" style={{ color: col.stroke }}>
+                {k.current} / {k.target} {k.unit}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-white/5 overflow-hidden relative">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${pct}%`,
+                  background: `linear-gradient(90deg, ${col.stroke}99, ${col.stroke})`,
+                  boxShadow: `0 0 8px 1px ${col.stroke}88`,
+                }}
+              />
+            </div>
+            <p className="text-[10px] text-right mt-0.5" style={{ color: col.stroke + "aa" }}>{pct}%</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Task Card ────────────────────────────────────────────────────────────────
+function TaskCard({
+  task, players, colRing, colDot, onStatusChange, onAssignChange,
+}: {
+  task: any; players: any[]; colRing: string; colDot: string;
+  onStatusChange: (id: number, s: TaskStatus) => void;
+  onAssignChange: (id: number, playerId: number | null) => void;
+}) {
+  const assignee = players.find(p => p.id === task.assignedPlayerId);
+
+  return (
+    <div
+      className="bg-background/60 border rounded-lg px-3 py-2.5 flex flex-col gap-1.5 hover:border-primary/40 transition-colors group"
+      style={{ borderColor: colRing + "40" }}
+    >
+      {/* Title + priority */}
+      <div className="flex items-start justify-between gap-1">
+        <span className="text-xs text-foreground leading-snug font-medium">{task.title}</span>
+        {task.priority && (
+          <span className={`text-[9px] px-1 py-0.5 rounded border uppercase font-bold shrink-0 ${PRIORITY_BADGE[task.priority as Priority] ?? ""}`}>
+            {task.priority}
+          </span>
+        )}
+      </div>
+      {/* KPI impact pulse (check column) */}
+      {task.status === "check" && task.kpiImpact && (
+        <div className="flex items-center gap-1 text-[10px] text-primary bg-primary/10 border border-primary/20 rounded px-1.5 py-0.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping shrink-0" />
+          {task.kpiImpact}
+        </div>
+      )}
+      {/* Footer: avatar + status dropdown */}
+      <div className="flex items-center justify-between mt-0.5">
+        {/* Avatar picker */}
+        <div className="relative group/avatar">
+          {assignee ? (
+            <Avatar name={assignee.name} color={assignee.avatarColor} size={20} />
+          ) : (
+            <div className="w-5 h-5 rounded-full border border-dashed border-border flex items-center justify-center text-muted-foreground/40">
+              <Plus size={8} />
+            </div>
+          )}
+          {/* Hover player picker */}
+          <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/avatar:flex flex-col bg-popover border border-border rounded-lg shadow-lg overflow-hidden min-w-[120px]">
+            <button
+              className="text-[10px] px-2 py-1.5 text-left hover:bg-muted transition-colors text-muted-foreground"
+              onClick={() => onAssignChange(task.id, null)}
+            >
+              Unassign
+            </button>
+            {players.map(p => (
+              <button
+                key={p.id}
+                className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted transition-colors"
+                onClick={() => onAssignChange(task.id, p.id)}
+              >
+                <Avatar name={p.name} color={p.avatarColor} size={16} />
+                <span className="text-[10px] text-foreground truncate">{p.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Status select — hidden until hover */}
+        <select
+          value={task.status}
+          onChange={e => onStatusChange(task.id, e.target.value as TaskStatus)}
+          className="text-[10px] bg-transparent border-none text-muted-foreground focus:ring-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+        >
+          {TASK_COLS.map(c => <option key={c.id} value={c.id} className="bg-background">{c.label}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+// ── Between-milestone Kanban ──────────────────────────────────────────────────
+function BetweenKanban({
+  milestoneId, tasks, players, kpis, msStatus, msTitle,
+  onStatusChange, onAssignChange, onAddTask,
+}: {
+  milestoneId: number; tasks: any[]; players: any[];
+  kpis: any[]; msStatus: MilestoneStatus; msTitle: string;
+  onStatusChange: (id: number, s: TaskStatus) => void;
+  onAssignChange: (id: number, pid: number | null) => void;
+  onAddTask: (milestoneId: number, status: TaskStatus) => void;
+}) {
+  const msTasks = tasks.filter(t => t.milestoneId === milestoneId);
+  const col = MS_COLORS[msStatus];
+
+  if (msTasks.length === 0) {
+    return (
+      <div className="flex flex-col items-center py-4">
+        <div className="h-12 w-px" style={{ background: `linear-gradient(to bottom, ${col.stroke}60, ${col.stroke}20)` }} />
+        <button
+          onClick={() => onAddTask(milestoneId, "plan")}
+          className="text-[10px] text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 py-2"
+        >
+          <Plus size={10} /> Add first task
+        </button>
+        <div className="h-12 w-px" style={{ background: `linear-gradient(to bottom, ${col.stroke}20, transparent)` }} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="py-3">
+      {/* Connector line top */}
+      <div className="flex justify-center mb-3">
+        <div className="h-8 w-px" style={{ background: `linear-gradient(to bottom, ${col.stroke}60, ${col.stroke}20)` }} />
+      </div>
+
+      {/* Kanban label */}
+      <div className="flex items-center gap-2 mb-3 px-1">
+        <div className="flex-1 h-px bg-border/40" />
+        <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold px-2">
+          {msTitle} — Tasks
+        </span>
+        <div className="flex-1 h-px bg-border/40" />
+      </div>
+
+      {/* 4-column kanban */}
+      <div
+        className="rounded-xl border overflow-hidden"
+        style={{ borderColor: col.stroke + "25", background: "rgba(15,23,42,0.7)" }}
+      >
+        <div className="grid grid-cols-4 divide-x" style={{ borderColor: col.stroke + "20" }}>
+          {TASK_COLS.map(tc => {
+            const colTasks = msTasks.filter(t => t.status === tc.id);
+            return (
+              <div key={tc.id} className="flex flex-col min-h-[80px]">
+                {/* Column header */}
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border/30">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: tc.dot }} />
+                    <span className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">
+                      {tc.label}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground/60">{colTasks.length}</span>
+                </div>
+                {/* Cards */}
+                <div className="flex flex-col gap-2 p-2 flex-1">
+                  {colTasks.map(t => (
+                    <TaskCard
+                      key={t.id}
+                      task={t}
+                      players={players}
+                      colRing={tc.ring}
+                      colDot={tc.dot}
+                      onStatusChange={onStatusChange}
+                      onAssignChange={onAssignChange}
+                    />
+                  ))}
+                  <button
+                    onClick={() => onAddTask(milestoneId, tc.id)}
+                    className="flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors py-1 px-1 rounded"
+                  >
+                    <Plus size={9} /> Add
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Dash to Finish Line KPIs */}
+      <DashToFinish kpis={kpis} milestoneId={milestoneId} msStatus={msStatus} />
+
+      {/* Connector line bottom */}
+      <div className="flex justify-center mt-3">
+        <div className="h-8 w-px" style={{ background: `linear-gradient(to bottom, ${col.stroke}20, transparent)` }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Milestone Node ────────────────────────────────────────────────────────────
+function MilestoneNode({
+  m, index, tasks, isSelected, onClick, onAddTask,
+}: {
+  m: any; index: number; tasks: any[];
+  isSelected: boolean; onClick: () => void;
+  onAddTask: (id: number) => void;
+}) {
+  const col = MS_COLORS[m.status as MilestoneStatus] ?? MS_COLORS.planted;
+  const mTasks = tasks.filter(t => t.milestoneId === m.id);
+  const done = mTasks.filter(t => t.status === "next_plan").length;
+  const pct = mTasks.length > 0 ? Math.round((done / mTasks.length) * 100) : 0;
+
+  return (
+    <div
+      className="flex flex-col items-center cursor-pointer group"
+      onClick={onClick}
+    >
+      {/* Node + label row */}
+      <div className="flex items-center gap-4 w-full">
+        {/* Left side info */}
+        <div className="flex-1 text-right min-w-0">
+          <div className="flex items-center justify-end gap-1 mb-0.5">
+            {[1,2,3,4,5].map(i => (
+              <Star key={i} size={9} className={i <= m.starsValue ? "fill-amber-400 text-amber-400" : "fill-none text-muted-foreground/20"} />
+            ))}
+          </div>
+          {m.targetDate && <p className="text-[10px] text-muted-foreground">{m.targetDate}</p>}
+        </div>
+
+        {/* Central node */}
+        <div className="relative shrink-0">
+          {/* Glow */}
+          <div
+            className="absolute inset-0 rounded-full blur-md opacity-60 group-hover:opacity-90 transition-opacity"
+            style={{ background: col.stroke, transform: "scale(1.5)" }}
+          />
+          {/* Outer ring (progress) */}
+          <svg width="56" height="56" className="relative z-10" style={{ transform: "rotate(-90deg)" }}>
+            <circle cx="28" cy="28" r="24" fill={col.fill} stroke={col.stroke + "40"} strokeWidth="2" />
+            {pct > 0 && (
+              <circle cx="28" cy="28" r="24" fill="none" stroke={col.stroke} strokeWidth="3"
+                strokeDasharray={`${(pct / 100) * 2 * Math.PI * 24} ${2 * Math.PI * 24}`}
+                strokeLinecap="round" />
+            )}
+          </svg>
+          {/* Inner icon */}
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <Flag size={16} style={{ color: col.stroke }} />
+          </div>
+          {/* Step badge */}
+          <div
+            className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[9px] font-bold px-1.5 py-0.5 rounded-full border"
+            style={{ color: col.stroke, borderColor: col.stroke + "50", background: "#0f172a", zIndex: 20 }}
+          >
+            {String(index + 1).padStart(2, "0")}
+          </div>
+        </div>
+
+        {/* Right side: title + status */}
+        <div className="flex-1 min-w-0">
+          <h3
+            className="font-serif font-bold text-sm leading-tight text-foreground group-hover:underline truncate"
+            title={m.title}
+          >
+            {m.title}
+          </h3>
+          <div className="flex items-center gap-2 mt-1">
+            <span
+              className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border"
+              style={{ color: col.stroke, borderColor: col.stroke + "40" }}
+            >
+              {col.label}
+            </span>
+            {mTasks.length > 0 && (
+              <span className="text-[10px] text-muted-foreground">{done}/{mTasks.length} tasks</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Add task mini-button */}
+      <button
+        onClick={e => { e.stopPropagation(); onAddTask(m.id); }}
+        className="mt-2 text-[10px] text-muted-foreground/50 hover:text-primary transition-colors flex items-center gap-1"
+      >
+        <Plus size={9} /> Add task
+      </button>
+    </div>
+  );
+}
+
+// ── Main Roadmap ──────────────────────────────────────────────────────────────
 export default function Roadmap() {
   const [, params] = useRoute("/game/:gameId/roadmap");
-  const gameId = Number(params?.gameId);
+  const [, altParams] = useRoute("/game/:gameId");
+  const gameId = Number(params?.gameId ?? altParams?.gameId);
   const queryClient = useQueryClient();
 
   const { data: milestones = [] } = useListMilestones(gameId, { query: { enabled: !!gameId, queryKey: getListMilestonesQueryKey(gameId) } });
   const { data: tasks = [] } = useListTasks(gameId, { query: { enabled: !!gameId, queryKey: getListTasksQueryKey(gameId) } });
-  const { data: kpis = [] } = useListKpis(gameId, { query: { enabled: !!gameId } });
+  const { data: kpis = [] } = useListKpis(gameId, { query: { enabled: !!gameId, queryKey: getListKpisQueryKey(gameId) } });
+  const { data: players = [] } = useListPlayers(gameId, { query: { enabled: !!gameId } });
 
   const createMilestone = useCreateMilestone();
   const updateMilestone = useUpdateMilestone();
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
 
-  const [selected, setSelected] = useState<{ type: "milestone" | "task"; id: number } | null>(null);
+  const [selectedMilestoneId, setSelectedMilestoneId] = useState<number | null>(null);
   const [newMilestoneOpen, setNewMilestoneOpen] = useState(false);
-  const [newTaskOpen, setNewTaskOpen] = useState<number | null>(null); // milestoneId
+  const [newTaskContext, setNewTaskContext] = useState<{ milestoneId: number; status: TaskStatus } | null>(null);
 
   const [mForm, setMForm] = useState({ title: "", description: "", starsValue: "3", targetDate: "" });
-  const [tForm, setTForm] = useState({ title: "", description: "", priority: "medium", kpiImpact: "" });
+  const [tForm, setTForm] = useState({ title: "", description: "", priority: "medium", kpiImpact: "none", assignedPlayerId: "none" });
 
-  const invalidateMilestones = () => queryClient.invalidateQueries({ queryKey: getListMilestonesQueryKey(gameId) });
-  const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: getListTasksQueryKey(gameId) });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: getListMilestonesQueryKey(gameId) });
+    queryClient.invalidateQueries({ queryKey: getListTasksQueryKey(gameId) });
+  };
 
   const handleCreateMilestone = () => {
     if (!mForm.title.trim()) return;
-    createMilestone.mutate({ gameId, data: { title: mForm.title, description: mForm.description, starsValue: Number(mForm.starsValue), targetDate: mForm.targetDate || undefined } },
-      { onSuccess: () => { setNewMilestoneOpen(false); setMForm({ title: "", description: "", starsValue: "3", targetDate: "" }); invalidateMilestones(); } });
+    createMilestone.mutate(
+      { gameId, data: { title: mForm.title, description: mForm.description, starsValue: Number(mForm.starsValue), targetDate: mForm.targetDate || undefined } },
+      { onSuccess: () => { setNewMilestoneOpen(false); setMForm({ title: "", description: "", starsValue: "3", targetDate: "" }); invalidate(); } }
+    );
   };
 
   const handleCreateTask = () => {
-    if (!tForm.title.trim()) return;
-    createTask.mutate({ gameId, data: { title: tForm.title, description: tForm.description, priority: tForm.priority as Priority, milestoneId: newTaskOpen ?? undefined, kpiImpact: tForm.kpiImpact || undefined } },
-      { onSuccess: () => { setNewTaskOpen(null); setTForm({ title: "", description: "", priority: "medium", kpiImpact: "" }); invalidateTasks(); } });
+    if (!tForm.title.trim() || !newTaskContext) return;
+    createTask.mutate(
+      { gameId, data: {
+        title: tForm.title, description: tForm.description,
+        priority: tForm.priority as Priority,
+        status: newTaskContext.status,
+        milestoneId: newTaskContext.milestoneId,
+        kpiImpact: (tForm.kpiImpact && tForm.kpiImpact !== "none") ? tForm.kpiImpact : undefined,
+        assignedPlayerId: (tForm.assignedPlayerId && tForm.assignedPlayerId !== "none") ? Number(tForm.assignedPlayerId) : undefined,
+      }},
+      { onSuccess: () => { setNewTaskContext(null); setTForm({ title: "", description: "", priority: "medium", kpiImpact: "none", assignedPlayerId: "none" }); invalidate(); } }
+    );
   };
 
-  const handleStatusChange = (milestoneId: number, status: MilestoneStatus) => {
-    updateMilestone.mutate({ gameId, milestoneId, data: { status } }, { onSuccess: invalidateMilestones });
+  const handleStatusChange = (taskId: number, status: TaskStatus) => {
+    updateTask.mutate({ gameId, taskId, data: { status } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListTasksQueryKey(gameId) }) });
   };
 
-  const handleTaskStatusChange = (taskId: number, status: TaskStatus) => {
-    updateTask.mutate({ gameId, taskId, data: { status } }, { onSuccess: invalidateTasks });
+  const handleAssignChange = (taskId: number, playerId: number | null) => {
+    updateTask.mutate({ gameId, taskId, data: { assignedPlayerId: playerId } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListTasksQueryKey(gameId) }) });
   };
 
-  // Layout constants — designed for a wide canvas that fills the screen
-  const SVG_W = 700;
-  const NODE_R = 30;
-  const TASK_R = 9;
-  const M_TOP = 70;
-  const M_STEP = 230;
-  const LEFT_X = 160;
-  const RIGHT_X = SVG_W - 160;
-  const _CENTER_X = SVG_W / 2; void _CENTER_X;
+  const handleMilestoneStatusChange = (milestoneId: number, status: MilestoneStatus) => {
+    updateMilestone.mutate({ gameId, milestoneId, data: { status } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListMilestonesQueryKey(gameId) }) });
+  };
 
-  const totalMilestones = milestones.length;
-
-  // Arrange milestones: alternating left/right in a true serpentine
-  type MilestoneNode = { x: number; y: number; col: "left" | "right"; m: typeof milestones[0] };
-  const milestoneNodes: MilestoneNode[] = milestones.map((m, i) => {
-    const col = i % 2 === 0 ? "left" : "right";
-    const x = col === "left" ? LEFT_X : RIGHT_X;
-    const y = M_TOP + i * M_STEP;
-    return { x, y, col, m };
-  });
-
-  // Tasks: fan out to the outer side of each milestone
-  type TaskNode = { x: number; y: number; t: typeof tasks[0] };
-  const taskNodes: TaskNode[] = milestoneNodes.flatMap(({ x, y, col, m }) => {
-    const mTasks = tasks.filter(t => t.milestoneId === m.id);
-    return mTasks.map((t, ti) => {
-      // Outer direction: left col fans left, right col fans right
-      const dir = col === "left" ? -1 : 1;
-      const spread = ti - (mTasks.length - 1) / 2;
-      const tx = x + dir * (NODE_R + 48 + Math.abs(spread) * 12);
-      const ty = y + spread * 38;
-      return { x: tx, y: ty, t };
-    });
-  });
-
-  // Unlinked tasks (no milestone)
   const unlinkedTasks = tasks.filter(t => !t.milestoneId);
-
-  const svgH = totalMilestones === 0
-    ? 400
-    : M_TOP + (totalMilestones - 1) * M_STEP + NODE_R + 100;
-
-  // Winding spine: curves through center between alternating milestones
-  const spinePath = milestoneNodes.length < 2
-    ? ""
-    : milestoneNodes.map((n, i) => {
-        if (i === 0) return `M ${n.x} ${n.y}`;
-        const prev = milestoneNodes[i - 1];
-        const midY = (prev.y + n.y) / 2;
-        // Bezier curves through center for a natural river-like wind
-        return `C ${prev.x} ${midY}, ${n.x} ${midY}, ${n.x} ${n.y}`;
-      }).join(" ");
-
-  const selectedMilestone = selected?.type === "milestone" ? milestones.find(m => m.id === selected.id) : null;
-  const selectedTask = selected?.type === "task" ? tasks.find(t => t.id === selected.id) : null;
+  const selectedMilestone = milestones.find(m => m.id === selectedMilestoneId);
 
   return (
     <GameLayout>
-      <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
-
-        {/* Scrollable roadmap canvas */}
-        <div className="flex-1 overflow-auto relative" style={{ background: "radial-gradient(ellipse at 50% 0%, #0d1b2a 0%, #060d14 60%, #030508 100%)" }}>
-          {/* Ambient stars */}
-          <div className="absolute inset-0 pointer-events-none">
-            {Array.from({ length: 40 }).map((_, i) => (
-              <div key={i} className="absolute rounded-full bg-white"
-                style={{ width: Math.random() * 2 + 1 + "px", height: Math.random() * 2 + 1 + "px", top: Math.random() * 50 + "%", left: Math.random() * 100 + "%", opacity: Math.random() * 0.4 + 0.05 }} />
-            ))}
-          </div>
-
-          <div className="relative p-6 flex flex-col items-center">
-            {/* Header */}
-            <div className="flex w-full max-w-2xl items-center justify-between mb-4 z-10">
-              <div>
-                <h1 className="text-xl font-serif text-amber-400 font-bold tracking-wide">Roadmap</h1>
-                <p className="text-xs text-muted-foreground mt-0.5">Milestones and tasks on the journey</p>
-              </div>
-              <Button size="sm" onClick={() => setNewMilestoneOpen(true)} className="gap-1.5 text-xs">
-                <Plus size={13} /> Milestone
-              </Button>
-            </div>
-
-            {/* SVG Roadmap */}
-            <svg
-              width={SVG_W}
-              height={svgH}
-              viewBox={`0 0 ${SVG_W} ${svgH}`}
-              className="w-full"
-              style={{ maxWidth: "700px" }}
-            >
-              <defs>
-                <filter id="glow-amber">
-                  <feGaussianBlur stdDeviation="4" result="blur" />
-                  <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-                </filter>
-                <filter id="glow-strong">
-                  <feGaussianBlur stdDeviation="8" result="blur" />
-                  <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-                </filter>
-                {milestoneNodes.map(({ m }) => (
-                  <radialGradient key={m.id} id={`mg-${m.id}`} cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor={MILESTONE_COLORS[m.status as MilestoneStatus]?.stroke ?? "#64748b"} stopOpacity="0.25" />
-                    <stop offset="100%" stopColor="transparent" stopOpacity="0" />
-                  </radialGradient>
-                ))}
-              </defs>
-
-              {/* Spine path — glowing trail */}
-              {spinePath && (
-                <>
-                  <path d={spinePath} fill="none" stroke="#1e3a5f" strokeWidth="3" strokeDasharray="8 6" />
-                  <path d={spinePath} fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeOpacity="0.3" />
-                </>
-              )}
-
-              {/* Task connector lines */}
-              {milestoneNodes.map(({ x, y, m }) => {
-                const mTasks = tasks.filter(t => t.milestoneId === m.id);
-                return mTasks.map((t, ti) => {
-                  const tn = taskNodes.find(tn => tn.t.id === t.id);
-                  if (!tn) return null;
-                  return (
-                    <line key={`conn-${t.id}`}
-                      x1={x} y1={y} x2={tn.x} y2={tn.y}
-                      stroke="#334155" strokeWidth="1.5" strokeDasharray="4 4" />
-                  );
-                });
-              })}
-
-              {/* Milestone glow halos */}
-              {milestoneNodes.map(({ x, y, m }) => (
-                <circle key={`halo-${m.id}`} cx={x} cy={y} r={NODE_R + 20}
-                  fill={`url(#mg-${m.id})`} />
-              ))}
-
-              {/* Milestone nodes */}
-              {milestoneNodes.map(({ x, y, col, m }, i) => {
-                const colors = MILESTONE_COLORS[m.status as MilestoneStatus] ?? MILESTONE_COLORS.planted;
-                const mTasks = tasks.filter(t => t.milestoneId === m.id);
-                const doneTasks = mTasks.filter(t => t.status === "next_plan").length;
-                const pct = mTasks.length > 0 ? doneTasks / mTasks.length : 0;
-                const arc = 2 * Math.PI * (NODE_R - 5) * pct;
-                const arcTotal = 2 * Math.PI * (NODE_R - 5);
-                const isSelected = selected?.type === "milestone" && selected.id === m.id;
-
-                return (
-                  <g key={m.id} onClick={() => setSelected(isSelected ? null : { type: "milestone", id: m.id })} style={{ cursor: "pointer" }}>
-                    {/* Progress ring */}
-                    <circle cx={x} cy={y} r={NODE_R - 5} fill="none" stroke="#1e293b" strokeWidth="4" />
-                    {pct > 0 && (
-                      <circle cx={x} cy={y} r={NODE_R - 5} fill="none"
-                        stroke={colors.stroke} strokeWidth="4"
-                        strokeDasharray={`${arc} ${arcTotal - arc}`}
-                        strokeLinecap="round"
-                        transform={`rotate(-90 ${x} ${y})`} />
-                    )}
-                    {/* Main node */}
-                    <circle cx={x} cy={y} r={NODE_R}
-                      fill={colors.fill}
-                      stroke={isSelected ? "#fbbf24" : colors.stroke}
-                      strokeWidth={isSelected ? 3 : 2} />
-                    {/* Star icon */}
-                    <text x={x} y={y + 1} textAnchor="middle" dominantBaseline="middle"
-                      fontSize="16" fill={colors.stroke}>✦</text>
-                    {/* Step number */}
-                    <text x={x} y={y + NODE_R + 14} textAnchor="middle"
-                      fontSize="10" fill="#64748b" fontFamily="serif">
-                      {String(i + 1).padStart(2, "0")}
-                    </text>
-                    {/* Title */}
-                    {(() => {
-                      const words = m.title.split(" ");
-                      const lines: string[] = [];
-                      let cur = "";
-                      for (const w of words) {
-                        if ((cur + " " + w).trim().length > 14) { lines.push(cur.trim()); cur = w; }
-                        else cur = (cur + " " + w).trim();
-                      }
-                      if (cur) lines.push(cur.trim());
-                      const labelX = col === "left" ? x - NODE_R - 12 : x + NODE_R + 12;
-                      const anchor = col === "left" ? "end" : "start";
-                      return lines.map((line, li) => (
-                        <text key={li} x={labelX} y={y + (li - (lines.length - 1) / 2) * 15}
-                          textAnchor={anchor} dominantBaseline="middle"
-                          fontSize="11" fill="#e2e8f0" fontFamily="serif" fontWeight="600">
-                          {line}
-                        </text>
-                      ));
-                    })()}
-                    {/* Stars value */}
-                    <text x={col === "left" ? x - NODE_R - 12 : x + NODE_R + 12}
-                      y={y + 22} textAnchor={col === "left" ? "end" : "start"}
-                      fontSize="10" fill="#f59e0b">
-                      {"✦".repeat(m.starsValue)}
-                    </text>
-                    {/* Target date */}
-                    {m.targetDate && (
-                      <text x={col === "left" ? x - NODE_R - 12 : x + NODE_R + 12}
-                        y={y + 37} textAnchor={col === "left" ? "end" : "start"}
-                        fontSize="9" fill="#475569">
-                        {m.targetDate}
-                      </text>
-                    )}
-                    {/* Add task button */}
-                    <g onClick={e => { e.stopPropagation(); setNewTaskOpen(m.id); }} style={{ cursor: "pointer" }}>
-                      <circle cx={x + NODE_R + 2} cy={y - NODE_R + 2} r={10}
-                        fill="#1e293b" stroke="#334155" strokeWidth="1.5" />
-                      <text x={x + NODE_R + 2} y={y - NODE_R + 2}
-                        textAnchor="middle" dominantBaseline="middle"
-                        fontSize="12" fill="#60a5fa">+</text>
-                    </g>
-                  </g>
-                );
-              })}
-
-              {/* Task nodes */}
-              {taskNodes.map(({ x, y, t }) => {
-                const colors = TASK_COLORS[t.status as TaskStatus] ?? TASK_COLORS.plan;
-                const pColor = t.priority ? PRIORITY_COLORS[t.priority as Priority] : "#64748b";
-                const isSelected = selected?.type === "task" && selected.id === t.id;
-                return (
-                  <g key={t.id} onClick={() => setSelected(isSelected ? null : { type: "task", id: t.id })} style={{ cursor: "pointer" }}>
-                    <circle cx={x} cy={y} r={TASK_R + 4} fill={colors.ring} fillOpacity="0.12" />
-                    <circle cx={x} cy={y} r={TASK_R}
-                      fill="#0f172a" stroke={isSelected ? "#fbbf24" : colors.ring}
-                      strokeWidth={isSelected ? 2.5 : 1.5} />
-                    <circle cx={x} cy={y} r={4} fill={colors.dot} />
-                    {/* Priority indicator */}
-                    <circle cx={x + TASK_R - 2} cy={y - TASK_R + 2} r={3}
-                      fill={pColor} />
-                  </g>
-                );
-              })}
-
-              {/* Empty state */}
-              {totalMilestones === 0 && (
-                <>
-                  <circle cx={SVG_W / 2} cy={svgH / 2} r={48} fill="#0f1e2e" stroke="#1e3a5f" strokeWidth="2" strokeDasharray="6 4" />
-                  <text x={SVG_W / 2} y={svgH / 2} textAnchor="middle" dominantBaseline="middle" fontSize="28" fill="#1e3a5f">✦</text>
-                  <text x={SVG_W / 2} y={svgH / 2 + 70} textAnchor="middle" fontSize="13" fill="#334155">Plant your first milestone</text>
-                </>
-              )}
-            </svg>
-
-            {/* Unlinked tasks */}
-            {unlinkedTasks.length > 0 && (
-              <div className="mt-8 w-full max-w-xl">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold mb-3">Unassigned Tasks</p>
-                <div className="flex flex-wrap gap-2">
-                  {unlinkedTasks.map(t => {
-                    const colors = TASK_COLORS[t.status as TaskStatus] ?? TASK_COLORS.plan;
-                    return (
-                      <button key={t.id} onClick={() => setSelected({ type: "task", id: t.id })}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-card border border-border rounded-full text-xs hover:border-primary/50 transition-colors">
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: colors.dot }} />
-                        {t.title}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+      <div
+        className="h-[calc(100vh-3.5rem)] overflow-auto"
+        style={{ background: "radial-gradient(ellipse at 50% 0%, #0d1b2a 0%, #060d14 60%, #030508 100%)" }}
+      >
+        {/* Stars */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          {Array.from({ length: 50 }).map((_, i) => (
+            <div key={i} className="absolute rounded-full bg-white"
+              style={{ width: Math.random() * 2 + 1 + "px", height: Math.random() * 2 + 1 + "px",
+                top: Math.random() * 100 + "%", left: Math.random() * 100 + "%",
+                opacity: Math.random() * 0.4 + 0.05 }} />
+          ))}
         </div>
 
-        {/* Detail panel */}
-        {(selectedMilestone || selectedTask) && (
-          <div className="w-80 border-l border-border bg-card/80 backdrop-blur flex flex-col shrink-0 overflow-y-auto">
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">
-                {selectedMilestone ? "Milestone" : "Task"}
-              </span>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelected(null)}>
-                <X size={14} />
-              </Button>
+        <div className="relative z-10 max-w-3xl mx-auto px-6 py-8">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-10">
+            <div>
+              <h1 className="text-2xl font-serif text-amber-400 font-bold tracking-wide">Roadmap</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {milestones.length} milestones · {tasks.length} tasks
+              </p>
             </div>
-
-            {selectedMilestone && (() => {
-              const mTasks = tasks.filter(t => t.milestoneId === selectedMilestone.id);
-              const done = mTasks.filter(t => t.status === "next_plan").length;
-              const colors = MILESTONE_COLORS[selectedMilestone.status as MilestoneStatus] ?? MILESTONE_COLORS.planted;
-              return (
-                <div className="p-4 flex flex-col gap-4">
-                  <div>
-                    <h2 className="font-serif text-lg font-bold text-foreground leading-tight">{selectedMilestone.title}</h2>
-                    {selectedMilestone.description && <p className="text-sm text-muted-foreground mt-2">{selectedMilestone.description}</p>}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <StarRating value={selectedMilestone.starsValue} />
-                    {selectedMilestone.targetDate && <span className="text-xs text-muted-foreground">{selectedMilestone.targetDate}</span>}
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground mb-1.5 block">Status</Label>
-                    <Select value={selectedMilestone.status} onValueChange={v => handleStatusChange(selectedMilestone.id, v as MilestoneStatus)}>
-                      <SelectTrigger className="h-8 text-xs" style={{ borderColor: colors.stroke, color: colors.stroke }}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(["planted","growing","blooming","harvested"] as MilestoneStatus[]).map(s => (
-                          <SelectItem key={s} value={s}>{MILESTONE_COLORS[s].label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {mTasks.length > 0 && (
-                    <div>
-                      <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-                        <span className="font-medium">Tasks</span>
-                        <span>{done}/{mTasks.length} done</span>
-                      </div>
-                      <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-3">
-                        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${mTasks.length > 0 ? (done / mTasks.length) * 100 : 0}%` }} />
-                      </div>
-                      <div className="space-y-2">
-                        {mTasks.map(t => {
-                          const tc = TASK_COLORS[t.status as TaskStatus] ?? TASK_COLORS.plan;
-                          return (
-                            <div key={t.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-background/50 border border-border/50">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tc.dot }} />
-                                <span className="text-xs text-foreground truncate">{t.title}</span>
-                              </div>
-                              <Select value={t.status} onValueChange={v => handleTaskStatusChange(t.id, v as TaskStatus)}>
-                                <SelectTrigger className="h-6 text-[10px] w-20 shrink-0">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {(["plan","doing","check","next_plan"] as TaskStatus[]).map(s => (
-                                    <SelectItem key={s} value={s}>{TASK_COLORS[s].label}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  <Button size="sm" variant="outline" className="gap-1.5 text-xs mt-1"
-                    onClick={() => { setNewTaskOpen(selectedMilestone.id); setSelected(null); }}>
-                    <Plus size={12} /> Add Task to this Milestone
-                  </Button>
-                </div>
-              );
-            })()}
-
-            {selectedTask && (() => {
-              const tc = TASK_COLORS[selectedTask.status as TaskStatus] ?? TASK_COLORS.plan;
-              const linkedMilestone = milestones.find(m => m.id === selectedTask.milestoneId);
-              return (
-                <div className="p-4 flex flex-col gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tc.dot }} />
-                      <span className="text-xs text-muted-foreground">{tc.label}</span>
-                      {selectedTask.priority && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold"
-                          style={{ color: PRIORITY_COLORS[selectedTask.priority as Priority], borderColor: PRIORITY_COLORS[selectedTask.priority as Priority] + "40" }}>
-                          {selectedTask.priority}
-                        </span>
-                      )}
-                    </div>
-                    <h2 className="font-serif text-lg font-bold text-foreground leading-tight">{selectedTask.title}</h2>
-                    {selectedTask.description && <p className="text-sm text-muted-foreground mt-2">{selectedTask.description}</p>}
-                  </div>
-                  {linkedMilestone && (
-                    <div className="flex items-center gap-2 text-xs text-primary/70 border border-primary/20 rounded-lg px-3 py-2">
-                      <ChevronRight size={12} />
-                      Milestone: {linkedMilestone.title}
-                    </div>
-                  )}
-                  {selectedTask.kpiImpact && (
-                    <div className="text-xs bg-primary/10 border border-primary/20 rounded-lg px-3 py-2">
-                      <span className="text-muted-foreground">KPI: </span>
-                      <span className="text-primary">{selectedTask.kpiImpact}</span>
-                    </div>
-                  )}
-                  <div>
-                    <Label className="text-xs text-muted-foreground mb-1.5 block">Status</Label>
-                    <Select value={selectedTask.status} onValueChange={v => handleTaskStatusChange(selectedTask.id, v as TaskStatus)}>
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(["plan","doing","check","next_plan"] as TaskStatus[]).map(s => (
-                          <SelectItem key={s} value={s}>{TASK_COLORS[s].label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              );
-            })()}
+            <Button size="sm" onClick={() => setNewMilestoneOpen(true)} className="gap-1.5">
+              <Plus size={14} /> Milestone
+            </Button>
           </div>
-        )}
+
+          {milestones.length === 0 ? (
+            <div className="flex flex-col items-center py-32 text-muted-foreground">
+              <Flag size={36} className="mb-4 text-primary/20" />
+              <p className="text-lg">No milestones yet.</p>
+              <p className="text-sm mt-1">Plant your first milestone to begin the journey.</p>
+              <Button className="mt-6 gap-2" onClick={() => setNewMilestoneOpen(true)}><Plus size={14} /> Plant First Milestone</Button>
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {milestones.map((m, i) => (
+                <div key={m.id}>
+                  {/* Milestone node */}
+                  <MilestoneNode
+                    m={m}
+                    index={i}
+                    tasks={tasks}
+                    isSelected={selectedMilestoneId === m.id}
+                    onClick={() => setSelectedMilestoneId(selectedMilestoneId === m.id ? null : m.id)}
+                    onAddTask={id => setNewTaskContext({ milestoneId: id, status: "plan" })}
+                  />
+
+                  {/* Expanded milestone details */}
+                  {selectedMilestoneId === m.id && (
+                    <div className="mt-3 mb-2 ml-16 mr-4 rounded-xl border border-border/50 bg-card/60 backdrop-blur p-4 flex flex-col gap-3">
+                      {m.description && <p className="text-sm text-muted-foreground">{m.description}</p>}
+                      <div className="flex items-center gap-3">
+                        <Label className="text-xs text-muted-foreground shrink-0">Status</Label>
+                        <Select value={m.status} onValueChange={v => handleMilestoneStatusChange(m.id, v as MilestoneStatus)}>
+                          <SelectTrigger className="h-7 text-xs w-36">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(["planted","growing","blooming","harvested"] as MilestoneStatus[]).map(s => (
+                              <SelectItem key={s} value={s}>{MS_COLORS[s].label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Between-milestone Kanban + KPI Dash */}
+                  <BetweenKanban
+                    milestoneId={m.id}
+                    tasks={tasks}
+                    players={players}
+                    kpis={kpis}
+                    msStatus={m.status as MilestoneStatus}
+                    msTitle={m.title}
+                    onStatusChange={handleStatusChange}
+                    onAssignChange={handleAssignChange}
+                    onAddTask={(mid, status) => setNewTaskContext({ milestoneId: mid, status })}
+                  />
+
+                  {/* Connector to next milestone */}
+                  {i < milestones.length - 1 && (
+                    <div className="flex justify-center -my-1">
+                      <div className="flex flex-col items-center gap-0.5">
+                        {[0,1,2].map(j => (
+                          <div key={j} className="w-1 h-1 rounded-full bg-primary/30" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Unlinked tasks */}
+              {unlinkedTasks.length > 0 && (
+                <div className="mt-8 border border-border/40 rounded-xl bg-card/40 p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold mb-3">Backlog — Unassigned to milestone</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {unlinkedTasks.map(t => {
+                      const tc = TASK_COLS.find(c => c.id === t.status) ?? TASK_COLS[0];
+                      return (
+                        <TaskCard
+                          key={t.id}
+                          task={t}
+                          players={players}
+                          colRing={tc.ring}
+                          colDot={tc.dot}
+                          onStatusChange={handleStatusChange}
+                          onAssignChange={handleAssignChange}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* New Milestone Dialog */}
+      {/* ── New Milestone Dialog ── */}
       <Dialog open={newMilestoneOpen} onOpenChange={setNewMilestoneOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Plant a Milestone</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><Label>Title</Label><Input value={mForm.title} onChange={e => setMForm(f => ({ ...f, title: e.target.value }))} placeholder="What landmark will you reach?" /></div>
-            <div><Label>Description</Label><Textarea value={mForm.description} onChange={e => setMForm(f => ({ ...f, description: e.target.value }))} /></div>
-            <div><Label>Stars Value (importance)</Label>
-              <Select value={mForm.starsValue} onValueChange={v => setMForm(f => ({ ...f, starsValue: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{[1,2,3,4,5].map(n => <SelectItem key={n} value={String(n)}>{n} stars</SelectItem>)}</SelectContent>
-              </Select>
+            <div><Label>Title</Label>
+              <Input value={mForm.title} onChange={e => setMForm(f => ({ ...f, title: e.target.value }))} placeholder="What landmark will you reach?" />
             </div>
-            <div><Label>Target Date</Label><Input type="date" value={mForm.targetDate} onChange={e => setMForm(f => ({ ...f, targetDate: e.target.value }))} /></div>
+            <div><Label>Description</Label>
+              <Textarea value={mForm.description} onChange={e => setMForm(f => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Stars Value</Label>
+                <Select value={mForm.starsValue} onValueChange={v => setMForm(f => ({ ...f, starsValue: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{[1,2,3,4,5].map(n => <SelectItem key={n} value={String(n)}>{n} stars</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label>Target Date</Label>
+                <Input type="date" value={mForm.targetDate} onChange={e => setMForm(f => ({ ...f, targetDate: e.target.value }))} />
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewMilestoneOpen(false)}>Cancel</Button>
@@ -511,32 +589,59 @@ export default function Roadmap() {
         </DialogContent>
       </Dialog>
 
-      {/* New Task Dialog */}
-      <Dialog open={newTaskOpen !== null} onOpenChange={open => !open && setNewTaskOpen(null)}>
+      {/* ── New Task Dialog ── */}
+      <Dialog open={newTaskContext !== null} onOpenChange={open => !open && setNewTaskContext(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add a Task</DialogTitle>
+            {newTaskContext && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {milestones.find(m => m.id === newTaskContext.milestoneId)?.title} → {TASK_COLS.find(c => c.id === newTaskContext.status)?.label}
+              </p>
+            )}
           </DialogHeader>
           <div className="space-y-4">
-            <div><Label>Title</Label><Input value={tForm.title} onChange={e => setTForm(f => ({ ...f, title: e.target.value }))} placeholder="What needs to be done?" /></div>
-            <div><Label>Description</Label><Textarea value={tForm.description} onChange={e => setTForm(f => ({ ...f, description: e.target.value }))} /></div>
-            <div><Label>Priority</Label>
-              <Select value={tForm.priority} onValueChange={v => setTForm(f => ({ ...f, priority: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
+            <div><Label>Title</Label>
+              <Input value={tForm.title} onChange={e => setTForm(f => ({ ...f, title: e.target.value }))} placeholder="What needs to be done?" />
+            </div>
+            <div><Label>Description</Label>
+              <Textarea value={tForm.description} onChange={e => setTForm(f => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Priority</Label>
+                <Select value={tForm.priority} onValueChange={v => setTForm(f => ({ ...f, priority: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Stakeholder</Label>
+                <Select value={tForm.assignedPlayerId} onValueChange={v => setTForm(f => ({ ...f, assignedPlayerId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Assign to..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {players.map(p => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        <span className="flex items-center gap-2">
+                          <Avatar name={p.name} color={p.avatarColor} size={14} />
+                          {p.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             {kpis.length > 0 && (
-              <div><Label>KPI Impact (optional)</Label>
+              <div><Label>KPI Impact</Label>
                 <Select value={tForm.kpiImpact} onValueChange={v => setTForm(f => ({ ...f, kpiImpact: v }))}>
                   <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {kpis.map(k => <SelectItem key={k.id} value={k.name}>{k.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -544,7 +649,7 @@ export default function Roadmap() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNewTaskOpen(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setNewTaskContext(null)}>Cancel</Button>
             <Button onClick={handleCreateTask} disabled={createTask.isPending}>Add Task</Button>
           </DialogFooter>
         </DialogContent>
