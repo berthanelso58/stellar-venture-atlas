@@ -504,8 +504,14 @@ export default function Roadmap() {
     updateTask.mutate({ gameId, taskId, data: { assignedPlayerId: playerId } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListTasksQueryKey(gameId) }) });
   };
 
-  // Reversed so highest-numbered milestone is at TOP, milestone 01 (launch pad) at BOTTOM
-  const displayMilestones = [...milestones].reverse();
+  // Sort by targetDate: furthest date → top (highest rank), closest to today → bottom (rank 01)
+  // Milestones with no date go to the top (treated as infinitely far)
+  const displayMilestones = [...milestones].sort((a, b) => {
+    if (!a.targetDate && !b.targetDate) return 0;
+    if (!a.targetDate) return -1; // no date → top
+    if (!b.targetDate) return 1;
+    return new Date(b.targetDate).getTime() - new Date(a.targetDate).getTime(); // furthest first
+  });
   const total = milestones.length;
   const unlinkedTasks = tasks.filter(task => !task.milestoneId);
 
