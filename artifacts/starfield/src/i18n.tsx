@@ -6,6 +6,7 @@ const T = {
   en: {
     // Nav
     roadmap: "Roadmap",
+    timeline: "Timeline",
     tasks: "Tasks",
     kpis: "KPIs",
     risks: "Risks",
@@ -68,6 +69,7 @@ const T = {
   },
   zh: {
     roadmap: "路线图",
+    timeline: "时间轴",
     tasks: "任务",
     kpis: "关键指标",
     risks: "风险",

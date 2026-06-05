@@ -127,11 +127,12 @@ export default function GameLayout({ children }: { children?: React.ReactNode })
   if (!gameId) return null;
 
   const navLinks = [
-    { href: `/game/${gameId}/roadmap`,  label: t.roadmap, id: "roadmap" },
-    { href: `/game/${gameId}/tasks`,    label: t.tasks,   id: "tasks" },
-    { href: `/game/${gameId}/kpis`,     label: t.kpis,    id: "kpis" },
-    { href: `/game/${gameId}/risks`,    label: t.risks,   id: "risks" },
-    { href: `/game/${gameId}/players`,  label: t.crew,    id: "players" },
+    { href: `/game/${gameId}/roadmap`,  label: t.roadmap,  id: "roadmap" },
+    { href: `/game/${gameId}/timeline`, label: t.timeline, id: "timeline" },
+    { href: `/game/${gameId}/tasks`,    label: t.tasks,    id: "tasks" },
+    { href: `/game/${gameId}/kpis`,     label: t.kpis,     id: "kpis" },
+    { href: `/game/${gameId}/risks`,    label: t.risks,    id: "risks" },
+    { href: `/game/${gameId}/players`,  label: t.crew,     id: "players" },
   ];
 
   return (
