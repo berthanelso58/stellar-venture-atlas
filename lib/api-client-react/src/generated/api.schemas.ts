@@ -11,6 +11,11 @@ export interface HealthStatus {
 
 export interface Game {
   id: number;
+  /**
+     * If set, this is a sub-game of the referenced game
+     * @nullable
+     */
+  parentGameId?: number | null;
   name: string;
   /** The North Star — mission statement */
   mission: string;
@@ -24,6 +29,8 @@ export interface Game {
 }
 
 export interface GameInput {
+  /** Optional parent game ID to create a sub-game */
+  parentGameId?: number;
   /** @minLength 1 */
   name: string;
   /** @minLength 1 */
@@ -38,6 +45,8 @@ export interface GameInput {
 }
 
 export interface GameUpdate {
+  /** @nullable */
+  parentGameId?: number | null;
   name?: string;
   mission?: string;
   description?: string;
@@ -145,6 +154,26 @@ export interface Milestone {
   positionY: number;
   /** @nullable */
   targetDate?: string | null;
+  /**
+     * Planned start date (ISO 8601)
+     * @nullable
+     */
+  plannedStartDate?: string | null;
+  /**
+     * Planned end date (ISO 8601)
+     * @nullable
+     */
+  plannedEndDate?: string | null;
+  /**
+     * Actual start date (ISO 8601)
+     * @nullable
+     */
+  actualStartDate?: string | null;
+  /**
+     * Actual end date (ISO 8601)
+     * @nullable
+     */
+  actualEndDate?: string | null;
   /** @nullable */
   taskCount?: number | null;
   /** @nullable */
@@ -164,6 +193,10 @@ export interface MilestoneInput {
   positionX?: number;
   positionY?: number;
   targetDate?: string;
+  plannedStartDate?: string;
+  plannedEndDate?: string;
+  actualStartDate?: string;
+  actualEndDate?: string;
 }
 
 export type MilestoneUpdateStatus = typeof MilestoneUpdateStatus[keyof typeof MilestoneUpdateStatus];
@@ -184,6 +217,14 @@ export interface MilestoneUpdate {
   positionX?: number;
   positionY?: number;
   targetDate?: string;
+  /** @nullable */
+  plannedStartDate?: string | null;
+  /** @nullable */
+  plannedEndDate?: string | null;
+  /** @nullable */
+  actualStartDate?: string | null;
+  /** @nullable */
+  actualEndDate?: string | null;
 }
 
 /**

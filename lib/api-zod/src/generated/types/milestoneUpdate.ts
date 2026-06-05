@@ -15,4 +15,12 @@ export interface MilestoneUpdate {
   positionX?: number;
   positionY?: number;
   targetDate?: string;
+  /** @nullable */
+  plannedStartDate?: string | null;
+  /** @nullable */
+  plannedEndDate?: string | null;
+  /** @nullable */
+  actualStartDate?: string | null;
+  /** @nullable */
+  actualEndDate?: string | null;
 }

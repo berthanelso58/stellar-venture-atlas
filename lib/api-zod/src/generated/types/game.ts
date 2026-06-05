@@ -8,6 +8,11 @@
 
 export interface Game {
   id: number;
+  /**
+     * If set, this is a sub-game of the referenced game
+     * @nullable
+     */
+  parentGameId?: number | null;
   name: string;
   /** The North Star — mission statement */
   mission: string;

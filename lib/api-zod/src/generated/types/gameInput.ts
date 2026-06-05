@@ -7,6 +7,8 @@
  */
 
 export interface GameInput {
+  /** Optional parent game ID to create a sub-game */
+  parentGameId?: number;
   /** @minLength 1 */
   name: string;
   /** @minLength 1 */

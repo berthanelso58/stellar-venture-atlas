@@ -7,6 +7,8 @@
  */
 
 export interface GameUpdate {
+  /** @nullable */
+  parentGameId?: number | null;
   name?: string;
   mission?: string;
   description?: string;

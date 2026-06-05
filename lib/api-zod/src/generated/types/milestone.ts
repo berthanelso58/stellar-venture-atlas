@@ -22,6 +22,26 @@ export interface Milestone {
   positionY: number;
   /** @nullable */
   targetDate?: string | null;
+  /**
+     * Planned start date (ISO 8601)
+     * @nullable
+     */
+  plannedStartDate?: string | null;
+  /**
+     * Planned end date (ISO 8601)
+     * @nullable
+     */
+  plannedEndDate?: string | null;
+  /**
+     * Actual start date (ISO 8601)
+     * @nullable
+     */
+  actualStartDate?: string | null;
+  /**
+     * Actual end date (ISO 8601)
+     * @nullable
+     */
+  actualEndDate?: string | null;
   /** @nullable */
   taskCount?: number | null;
   /** @nullable */

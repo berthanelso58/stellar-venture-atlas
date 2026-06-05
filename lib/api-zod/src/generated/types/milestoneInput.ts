@@ -18,4 +18,8 @@ export interface MilestoneInput {
   positionX?: number;
   positionY?: number;
   targetDate?: string;
+  plannedStartDate?: string;
+  plannedEndDate?: string;
+  actualStartDate?: string;
+  actualEndDate?: string;
 }

@@ -13,6 +13,10 @@ export const milestonesTable = pgTable("milestones", {
   positionX: real("position_x").notNull().default(50),
   positionY: real("position_y").notNull().default(50),
   targetDate: text("target_date"),
+  plannedStartDate: text("planned_start_date"),
+  plannedEndDate: text("planned_end_date"),
+  actualStartDate: text("actual_start_date"),
+  actualEndDate: text("actual_end_date"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

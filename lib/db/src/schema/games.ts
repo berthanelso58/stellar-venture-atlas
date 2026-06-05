@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const gamesTable = pgTable("games", {
   id: serial("id").primaryKey(),
+  parentGameId: integer("parent_game_id"),
   name: text("name").notNull(),
   mission: text("mission").notNull(),
   description: text("description"),

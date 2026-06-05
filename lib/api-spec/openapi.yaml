@@ -766,6 +766,9 @@ components:
       properties:
         id:
           type: integer
+        parentGameId:
+          type: ["integer", "null"]
+          description: If set, this is a sub-game of the referenced game
         name:
           type: string
         mission:
@@ -788,6 +791,9 @@ components:
       type: object
       required: [name, mission, playerCount]
       properties:
+        parentGameId:
+          type: integer
+          description: Optional parent game ID to create a sub-game
         name:
           type: string
           minLength: 1
@@ -806,6 +812,8 @@ components:
     GameUpdate:
       type: object
       properties:
+        parentGameId:
+          type: ["integer", "null"]
         name:
           type: string
         mission:
@@ -940,6 +948,18 @@ components:
           description: Y position on earth canvas (0-100)
         targetDate:
           type: ["string", "null"]
+        plannedStartDate:
+          type: ["string", "null"]
+          description: Planned start date (ISO 8601)
+        plannedEndDate:
+          type: ["string", "null"]
+          description: Planned end date (ISO 8601)
+        actualStartDate:
+          type: ["string", "null"]
+          description: Actual start date (ISO 8601)
+        actualEndDate:
+          type: ["string", "null"]
+          description: Actual end date (ISO 8601)
         taskCount:
           type: ["integer", "null"]
         completedTaskCount:
@@ -967,6 +987,14 @@ components:
           type: number
         targetDate:
           type: string
+        plannedStartDate:
+          type: string
+        plannedEndDate:
+          type: string
+        actualStartDate:
+          type: string
+        actualEndDate:
+          type: string
 
     MilestoneUpdate:
       type: object
@@ -986,6 +1014,14 @@ components:
           type: number
         targetDate:
           type: string
+        plannedStartDate:
+          type: ["string", "null"]
+        plannedEndDate:
+          type: ["string", "null"]
+        actualStartDate:
+          type: ["string", "null"]
+        actualEndDate:
+          type: ["string", "null"]
 
     Task:
       type: object

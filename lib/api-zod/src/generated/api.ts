@@ -21,6 +21,7 @@ export const HealthCheckResponse = zod.object({
  */
 export const ListGamesResponseItem = zod.object({
   "id": zod.number(),
+  "parentGameId": zod.number().nullish().describe('If set, this is a sub-game of the referenced game'),
   "name": zod.string(),
   "mission": zod.string().describe('The North Star — mission statement'),
   "description": zod.string().nullish(),
@@ -42,6 +43,7 @@ export const createGameBodyPlayerCountMax = 20;
 
 
 export const CreateGameBody = zod.object({
+  "parentGameId": zod.number().optional().describe('Optional parent game ID to create a sub-game'),
   "name": zod.string().min(1),
   "mission": zod.string().min(1),
   "description": zod.string().optional(),
@@ -59,6 +61,7 @@ export const GetGameParams = zod.object({
 
 export const GetGameResponse = zod.object({
   "id": zod.number(),
+  "parentGameId": zod.number().nullish().describe('If set, this is a sub-game of the referenced game'),
   "name": zod.string(),
   "mission": zod.string().describe('The North Star — mission statement'),
   "description": zod.string().nullish(),
@@ -77,6 +80,7 @@ export const UpdateGameParams = zod.object({
 })
 
 export const UpdateGameBody = zod.object({
+  "parentGameId": zod.number().nullish(),
   "name": zod.string().optional(),
   "mission": zod.string().optional(),
   "description": zod.string().optional(),
@@ -86,6 +90,7 @@ export const UpdateGameBody = zod.object({
 
 export const UpdateGameResponse = zod.object({
   "id": zod.number(),
+  "parentGameId": zod.number().nullish().describe('If set, this is a sub-game of the referenced game'),
   "name": zod.string(),
   "mission": zod.string().describe('The North Star — mission statement'),
   "description": zod.string().nullish(),
@@ -267,6 +272,10 @@ export const ListMilestonesResponseItem = zod.object({
   "positionX": zod.number().describe('X position on earth canvas (0-100)'),
   "positionY": zod.number().describe('Y position on earth canvas (0-100)'),
   "targetDate": zod.string().nullish(),
+  "plannedStartDate": zod.string().nullish().describe('Planned start date (ISO 8601)'),
+  "plannedEndDate": zod.string().nullish().describe('Planned end date (ISO 8601)'),
+  "actualStartDate": zod.string().nullish().describe('Actual start date (ISO 8601)'),
+  "actualEndDate": zod.string().nullish().describe('Actual end date (ISO 8601)'),
   "taskCount": zod.number().nullish(),
   "completedTaskCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
@@ -292,7 +301,11 @@ export const CreateMilestoneBody = zod.object({
   "starsValue": zod.number().min(1).max(createMilestoneBodyStarsValueMax),
   "positionX": zod.number().optional(),
   "positionY": zod.number().optional(),
-  "targetDate": zod.string().optional()
+  "targetDate": zod.string().optional(),
+  "plannedStartDate": zod.string().optional(),
+  "plannedEndDate": zod.string().optional(),
+  "actualStartDate": zod.string().optional(),
+  "actualEndDate": zod.string().optional()
 })
 
 
@@ -311,7 +324,11 @@ export const UpdateMilestoneBody = zod.object({
   "starsValue": zod.number().optional(),
   "positionX": zod.number().optional(),
   "positionY": zod.number().optional(),
-  "targetDate": zod.string().optional()
+  "targetDate": zod.string().optional(),
+  "plannedStartDate": zod.string().nullish(),
+  "plannedEndDate": zod.string().nullish(),
+  "actualStartDate": zod.string().nullish(),
+  "actualEndDate": zod.string().nullish()
 })
 
 export const UpdateMilestoneResponse = zod.object({
@@ -324,6 +341,10 @@ export const UpdateMilestoneResponse = zod.object({
   "positionX": zod.number().describe('X position on earth canvas (0-100)'),
   "positionY": zod.number().describe('Y position on earth canvas (0-100)'),
   "targetDate": zod.string().nullish(),
+  "plannedStartDate": zod.string().nullish().describe('Planned start date (ISO 8601)'),
+  "plannedEndDate": zod.string().nullish().describe('Planned end date (ISO 8601)'),
+  "actualStartDate": zod.string().nullish().describe('Actual start date (ISO 8601)'),
+  "actualEndDate": zod.string().nullish().describe('Actual end date (ISO 8601)'),
   "taskCount": zod.number().nullish(),
   "completedTaskCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
@@ -648,6 +669,7 @@ export const GetGameDashboardParams = zod.object({
 export const GetGameDashboardResponse = zod.object({
   "game": zod.object({
   "id": zod.number(),
+  "parentGameId": zod.number().nullish().describe('If set, this is a sub-game of the referenced game'),
   "name": zod.string(),
   "mission": zod.string().describe('The North Star — mission statement'),
   "description": zod.string().nullish(),
