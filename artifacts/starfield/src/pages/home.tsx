@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Star, AlertCircle } from "lucide-react";
+import { Plus, Star, AlertCircle, LayoutGrid } from "lucide-react";
 
 const EMPTY_FORM = { name: "", mission: "", description: "", playerCount: "1" };
 
@@ -95,9 +95,16 @@ export default function Home() {
 
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Your Games</h2>
-          <Button data-testid="button-create-game" onClick={handleOpen} className="gap-2">
-            <Plus size={16} /> New Game
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link href="/timeline">
+              <Button variant="outline" className="gap-2 text-sm">
+                <LayoutGrid size={15} /> All Timelines
+              </Button>
+            </Link>
+            <Button data-testid="button-create-game" onClick={handleOpen} className="gap-2">
+              <Plus size={16} /> New Game
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (

@@ -13,6 +13,7 @@ import Risks from "./pages/game/risks";
 import Kpis from "./pages/game/kpis";
 import Players from "./pages/game/players";
 import Timeline from "./pages/game/timeline";
+import GlobalTimeline from "./pages/timeline";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,7 @@ function GameRoutes() {
         <Route path="/game/:gameId/kpis" component={Kpis} />
         <Route path="/game/:gameId/players" component={Players} />
         <Route path="/game/:gameId/timeline" component={Timeline} />
+        <Route path="/timeline" component={GlobalTimeline} />
         <Route component={NotFound} />
       </Switch>
     </ValuesProvider>
