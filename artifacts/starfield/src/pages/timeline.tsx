@@ -152,6 +152,26 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** "YYYY-MM-DDTHH:mm" — value format required by datetime-local inputs */
+function isoDateTime(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// Duration of each granularity level in milliseconds (used for card height scaling)
+const NODE_DURATION_MS: Record<string, number> = {
+  hour:    MS_HOUR,
+  day:     MS_DAY,
+  week:    7  * MS_DAY,
+  month:   30 * MS_DAY,
+  quarter: 91 * MS_DAY,
+  year:    365 * MS_DAY,
+};
+// Base row pixel height — card height is fraction of this
+const BASE_ROW_PX: Record<string, number> = {
+  hour: 56, day: 64, week: 52, month: 48, quarter: 44, year: 44,
+};
+
 // ── Year range localStorage persistence ───────────────────────────────────────
 const YEAR_RANGE_KEY = "sf-timeline-year-range";
 function loadYearRange(): [number, number] {
@@ -206,16 +226,31 @@ function NowRow({ colCount, colW }: { colCount: number; colW: number }) {
   );
 }
 
-function MilestoneCard({ m, onEdit }: { m: Milestone; onEdit: (e: React.MouseEvent) => void }) {
+function MilestoneCard({ m, node, onEdit }: { m: Milestone; node: TimeNode; onEdit: (e: React.MouseEvent) => void }) {
   const s = PDCA[m.status] ?? PDCA.planted;
   const nowTs = Date.now();
-  const planEnd = m.plannedEndDate ? new Date(m.plannedEndDate).getTime() : null;
-  const actEnd  = m.actualEndDate  ? new Date(m.actualEndDate).getTime()  : null;
+  const planStart = m.plannedStartDate ? parseDate(m.plannedStartDate).getTime() : null;
+  const planEnd   = m.plannedEndDate   ? parseDate(m.plannedEndDate).getTime()   : null;
+  const actEnd    = m.actualEndDate    ? parseDate(m.actualEndDate).getTime()    : null;
   const isOverdue = planEnd && planEnd < nowTs && m.status !== "harvested";
+
+  // Height proportional to plan-frame duration vs this row's time span
+  const planDuration = planStart && planEnd ? planEnd - planStart : 0;
+  const nodeDuration = NODE_DURATION_MS[node.granularity] ?? MS_DAY;
+  const baseRowPx    = BASE_ROW_PX[node.granularity] ?? 48;
+  const cardHeight   = planDuration > 0
+    ? Math.max(40, Math.min(640, (planDuration / nodeDuration) * baseRowPx))
+    : undefined;
+
+  // Offset within the row: how far into the period does the plan start?
+  const nodeStartMs = node.start.getTime();
+  const offsetRatio = planStart ? Math.max(0, Math.min(1, (planStart - nodeStartMs) / nodeDuration)) : 0;
+  const offsetPx    = cardHeight != null ? offsetRatio * baseRowPx : 0;
 
   return (
     <div
       onClick={onEdit}
+      style={{ minHeight: cardHeight, marginTop: offsetPx > 0 ? offsetPx : undefined }}
       className={`group relative rounded border text-[10px] px-1.5 py-1 cursor-pointer hover:brightness-125 transition-all ${s.bg}`}
     >
       <div className="flex items-start gap-1">
@@ -267,8 +302,8 @@ function MilestoneForm({ state, onClose, onSaved }: { state: SheetState; onClose
     description:     existing?.description     ?? "",
     status:          existing?.status          ?? "planted",
     starsValue:      String(existing?.starsValue ?? 1),
-    plannedStartDate: existing?.plannedStartDate ?? (state.mode === "create" ? isoDate(node.start) : ""),
-    plannedEndDate:   existing?.plannedEndDate   ?? (state.mode === "create" ? isoDate(new Date(node.end.getTime() - MS_DAY)) : ""),
+    plannedStartDate: existing?.plannedStartDate ?? (state.mode === "create" ? isoDateTime(node.start) : ""),
+    plannedEndDate:   existing?.plannedEndDate   ?? (state.mode === "create" ? isoDateTime(new Date(node.end.getTime() - 1)) : ""),
     actualStartDate:  existing?.actualStartDate  ?? "",
     actualEndDate:    existing?.actualEndDate    ?? "",
   }));
@@ -361,17 +396,18 @@ function MilestoneForm({ state, onClose, onSaved }: { state: SheetState; onClose
 
       {/* Plan frame */}
       <div className="space-y-2">
-        <Label className="text-xs text-sky-400/80">Plan Frame</Label>
+        <Label className="text-xs text-sky-400/80">Plan Frame <span className="text-muted-foreground/40 font-normal">(date + time)</span></Label>
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
             <Label className="text-[10px] text-muted-foreground/50">Start</Label>
-            <Input type="date" value={form.plannedStartDate} onChange={e => set("plannedStartDate", e.target.value)} className="text-xs" />
+            <Input type="datetime-local" value={form.plannedStartDate} onChange={e => set("plannedStartDate", e.target.value)} className="text-xs px-1.5" />
           </div>
           <div className="space-y-1">
             <Label className="text-[10px] text-muted-foreground/50">End</Label>
-            <Input type="date" value={form.plannedEndDate} onChange={e => set("plannedEndDate", e.target.value)} className="text-xs" />
+            <Input type="datetime-local" value={form.plannedEndDate} onChange={e => set("plannedEndDate", e.target.value)} className="text-xs px-1.5" />
           </div>
         </div>
+        <p className="text-[9px] text-muted-foreground/30">Card height reflects duration — a 3 h plan looks taller than a 30 min plan</p>
       </div>
 
       {/* Actual frame — hour + minute precision */}
@@ -662,6 +698,7 @@ export default function GlobalTimeline() {
                           <div key={m.id} className="mb-0.5">
                             <MilestoneCard
                               m={m}
+                              node={node}
                               onEdit={e => { e.stopPropagation(); openEdit(node, g.id, m); }}
                             />
                           </div>
