@@ -6,9 +6,13 @@ import {
   useCreateMilestone,
   useUpdateMilestone,
   useDeleteMilestone,
+  useCreateTask,
+  useUpdateTask,
+  useDeleteTask,
   getListMilestonesQueryOptions,
   getListMilestonesQueryKey,
   getListTasksQueryOptions,
+  getListTasksQueryKey,
 } from "@workspace/api-client-react";
 import type { Milestone, Task } from "@workspace/api-client-react";
 import {
@@ -226,13 +230,14 @@ function NowRow({ colCount, colW }: { colCount: number; colW: number }) {
   );
 }
 
-function MilestoneCard({ m, node, onEdit }: { m: Milestone; node: TimeNode; onEdit: (e: React.MouseEvent) => void }) {
+function MilestoneCard({ m, node, tasks = [], onEdit }: { m: Milestone; node: TimeNode; tasks?: Task[]; onEdit: (e: React.MouseEvent) => void }) {
   const s = PDCA[m.status] ?? PDCA.planted;
   const nowTs = Date.now();
   const planStart = m.plannedStartDate ? parseDate(m.plannedStartDate).getTime() : null;
   const planEnd   = m.plannedEndDate   ? parseDate(m.plannedEndDate).getTime()   : null;
-  const actEnd    = m.actualEndDate    ? parseDate(m.actualEndDate).getTime()    : null;
   const isOverdue = planEnd && planEnd < nowTs && m.status !== "harvested";
+  const [showTasks, setShowTasks] = useState(false);
+  const doneCount = tasks.filter(t => t.status === "done").length;
 
   // Height proportional to plan-frame duration vs this row's time span
   const planDuration = planStart && planEnd ? planEnd - planStart : 0;
@@ -283,7 +288,115 @@ function MilestoneCard({ m, node, onEdit }: { m: Milestone; node: TimeNode; onEd
               {isOverdue && <span className="text-[8px] text-red-400/70">⚠</span>}
             </div>
           )}
+          {/* Tasks summary toggle */}
+          {tasks.length > 0 && (
+            <button
+              onClick={e => { e.stopPropagation(); setShowTasks(p => !p); }}
+              className="flex items-center gap-0.5 mt-0.5 text-[8px] text-violet-400/60 hover:text-violet-300/80 transition-colors w-full"
+            >
+              <CheckSquare size={7} className="shrink-0" />
+              <span>{doneCount}/{tasks.length}</span>
+              <span className="ml-auto opacity-40">{showTasks ? "▲" : "▼"}</span>
+            </button>
+          )}
+          {showTasks && tasks.length > 0 && (
+            <div className="mt-0.5 space-y-0.5 border-t border-current/10 pt-0.5">
+              {tasks.map(t => (
+                <div key={t.id} className={`flex items-center gap-0.5 text-[8px] ${t.status === "done" ? "line-through text-muted-foreground/25" : "text-muted-foreground/50"}`}>
+                  <span className="w-1 h-1 rounded-full shrink-0 bg-current opacity-50" />
+                  <span className="truncate">{t.title}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Milestone tasks section (nested inside edit Sheet) ────────────────────────
+const TASK_STATUSES = [
+  { value: "plan",      label: "Plan", color: "text-sky-400"              },
+  { value: "doing",     label: "Do",   color: "text-amber-400"            },
+  { value: "done",      label: "Done", color: "text-emerald-400"          },
+  { value: "cancelled", label: "Skip", color: "text-muted-foreground/30"  },
+];
+const TASK_STATUS_NEXT: Record<string, string> = { plan: "doing", doing: "done", done: "plan", cancelled: "plan" };
+
+function MilestoneTasksSection({ milestoneId, gameId, allTasks }: {
+  milestoneId: number;
+  gameId: number;
+  allTasks: Task[];
+}) {
+  const tasks = allTasks.filter(t => t.milestoneId === milestoneId);
+  const [newTitle, setNewTitle] = useState("");
+  const qc = useQueryClient();
+  const inv = useCallback(() => qc.invalidateQueries({ queryKey: getListTasksQueryKey(gameId) }), [qc, gameId]);
+
+  const create = useCreateTask({ mutation: { onSuccess: inv } });
+  const update = useUpdateTask({ mutation: { onSuccess: inv } });
+  const remove = useDeleteTask({ mutation: { onSuccess: inv } });
+
+  const handleAdd = () => {
+    const title = newTitle.trim();
+    if (!title) return;
+    create.mutate({ gameId, data: { title, milestoneId, status: "plan", priority: "medium" } });
+    setNewTitle("");
+  };
+
+  return (
+    <div className="space-y-2 pt-2 border-t border-border/15">
+      <Label className="text-xs text-violet-400/80 flex items-center gap-1.5">
+        <CheckSquare size={11} />
+        Tasks <span className="text-muted-foreground/40 font-normal">({tasks.length})</span>
+      </Label>
+
+      {tasks.length > 0 && (
+        <div className="space-y-1">
+          {tasks.map(t => {
+            const st = TASK_STATUSES.find(s => s.value === t.status) ?? TASK_STATUSES[0];
+            return (
+              <div key={t.id} className="flex items-center gap-1.5 group/task">
+                <button
+                  onClick={() => update.mutate({ gameId, taskId: t.id, data: { status: TASK_STATUS_NEXT[t.status] ?? "plan" } })}
+                  title="Click to advance status"
+                  className={`text-[8px] font-bold w-9 shrink-0 rounded px-0.5 py-[1px] border border-current/20 text-center hover:brightness-125 transition-colors ${st.color}`}
+                >
+                  {st.label}
+                </button>
+                <span className={`text-[10px] flex-1 truncate ${t.status === "done" ? "line-through text-muted-foreground/30" : "text-muted-foreground/60"}`}>
+                  {t.title}
+                </span>
+                <button
+                  onClick={() => remove.mutate({ gameId, taskId: t.id })}
+                  className="opacity-0 group-hover/task:opacity-100 transition-opacity text-red-400/40 hover:text-red-300/70 shrink-0"
+                  title="Delete task"
+                >
+                  <Trash2 size={9} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="flex gap-1">
+        <Input
+          value={newTitle}
+          onChange={e => setNewTitle(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleAdd()}
+          placeholder="New task… press Enter"
+          className="text-[10px] h-6 px-2 flex-1"
+        />
+        <Button
+          size="sm"
+          onClick={handleAdd}
+          disabled={!newTitle.trim() || create.isPending}
+          className="h-6 px-2"
+        >
+          <Plus size={9} />
+        </Button>
       </div>
     </div>
   );
@@ -292,7 +405,7 @@ function MilestoneCard({ m, node, onEdit }: { m: Milestone; node: TimeNode; onEd
 // ── Milestone form (inside Sheet) ─────────────────────────────────────────────
 const EMPTY_FORM = { title: "", description: "", status: "planted", starsValue: "1", plannedStartDate: "", plannedEndDate: "", actualStartDate: "", actualEndDate: "" };
 
-function MilestoneForm({ state, onClose, onSaved }: { state: SheetState; onClose: () => void; onSaved: () => void }) {
+function MilestoneForm({ state, allTasks, onClose, onSaved }: { state: SheetState; allTasks: Task[]; onClose: () => void; onSaved: () => void }) {
   if (!state) return null;
   const { node, gameId } = state;
   const existing = state.mode === "edit" ? state.milestone : null;
@@ -432,6 +545,15 @@ function MilestoneForm({ state, onClose, onSaved }: { state: SheetState; onClose
         <Textarea value={form.description} onChange={e => set("description", e.target.value)} placeholder="Optional notes…" rows={2} className="text-xs resize-none" />
       </div>
 
+      {/* Tasks (edit mode only) */}
+      {state.mode === "edit" && existing && (
+        <MilestoneTasksSection
+          milestoneId={existing.id}
+          gameId={gameId}
+          allTasks={allTasks}
+        />
+      )}
+
       {/* Actions */}
       <div className="flex gap-2 pt-1">
         <Button onClick={handleSubmit} disabled={!form.title.trim() || busy} className="flex-1 text-xs" size="sm">
@@ -518,6 +640,21 @@ export default function GlobalTimeline() {
       return map;
     }),
     [gameData, nodes]
+  );
+
+  // ── Milestone-task map per game: milestoneId → Task[] ────────────────────────
+  const milestoneTaskMaps = useMemo(() =>
+    gameData.map(({ tasks }) => {
+      const map = new Map<number, Task[]>();
+      for (const t of tasks) {
+        if (t.milestoneId != null) {
+          if (!map.has(t.milestoneId)) map.set(t.milestoneId, []);
+          map.get(t.milestoneId)!.push(t);
+        }
+      }
+      return map;
+    }),
+    [gameData]
   );
 
   // ── NOW divider + flat rows ──────────────────────────────────────────────────
@@ -699,6 +836,7 @@ export default function GlobalTimeline() {
                             <MilestoneCard
                               m={m}
                               node={node}
+                              tasks={milestoneTaskMaps[gi]?.get(m.id) ?? []}
                               onEdit={e => { e.stopPropagation(); openEdit(node, g.id, m); }}
                             />
                           </div>
@@ -741,7 +879,12 @@ export default function GlobalTimeline() {
               {sheet?.mode === "create" ? "New Milestone" : "Edit Milestone"}
             </SheetTitle>
           </SheetHeader>
-          <MilestoneForm state={sheet} onClose={closeSheet} onSaved={closeSheet} />
+          <MilestoneForm
+            state={sheet}
+            allTasks={sheet ? (gameData.find(gd => gd.game.id === sheet.gameId)?.tasks ?? []) : []}
+            onClose={closeSheet}
+            onSaved={closeSheet}
+          />
         </SheetContent>
       </Sheet>
     </div>
