@@ -131,12 +131,44 @@ function defaultExpanded(): Set<string> {
 
 function fmtDate(s: string | null | undefined): string {
   if (!s) return "–";
-  const d = new Date(s);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const d = parseDate(s);
+  const base = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (s.includes("T") && s.length > 10) {
+    const hm = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return `${base}, ${hm}`;
+  }
+  return base;
+}
+
+/** Parse date strings as local time (avoids UTC-midnight offset bug). */
+function parseDate(s: string): Date {
+  if (!s) return new Date(NaN);
+  // "YYYY-MM-DD" → treat as local midnight; "YYYY-MM-DDTHH:mm" → already local
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + "T00:00");
+  return new Date(s);
 }
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+// ── Year range localStorage persistence ───────────────────────────────────────
+const YEAR_RANGE_KEY = "sf-timeline-year-range";
+function loadYearRange(): [number, number] {
+  try {
+    const raw = localStorage.getItem(YEAR_RANGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed) && parsed.length === 2 && typeof parsed[0] === "number" && typeof parsed[1] === "number") {
+        return [parsed[0], parsed[1]];
+      }
+    }
+  } catch { /* ignore */ }
+  const y = new Date().getFullYear();
+  return [y - 1, y + 3];
+}
+function saveYearRange(r: [number, number]) {
+  try { localStorage.setItem(YEAR_RANGE_KEY, JSON.stringify(r)); } catch { /* ignore */ }
 }
 
 // ── PDCA / status visual config ───────────────────────────────────────────────
@@ -342,19 +374,20 @@ function MilestoneForm({ state, onClose, onSaved }: { state: SheetState; onClose
         </div>
       </div>
 
-      {/* Actual frame */}
+      {/* Actual frame — hour + minute precision */}
       <div className="space-y-2">
-        <Label className="text-xs text-emerald-400/80">Actual Frame</Label>
+        <Label className="text-xs text-emerald-400/80">Actual Frame <span className="text-muted-foreground/40 font-normal">(date + time)</span></Label>
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
             <Label className="text-[10px] text-muted-foreground/50">Start</Label>
-            <Input type="date" value={form.actualStartDate} onChange={e => set("actualStartDate", e.target.value)} className="text-xs" />
+            <Input type="datetime-local" value={form.actualStartDate} onChange={e => set("actualStartDate", e.target.value)} className="text-xs px-1.5" />
           </div>
           <div className="space-y-1">
             <Label className="text-[10px] text-muted-foreground/50">End</Label>
-            <Input type="date" value={form.actualEndDate} onChange={e => set("actualEndDate", e.target.value)} className="text-xs" />
+            <Input type="datetime-local" value={form.actualEndDate} onChange={e => set("actualEndDate", e.target.value)} className="text-xs px-1.5" />
           </div>
         </div>
+        <p className="text-[9px] text-muted-foreground/30">e.g. Jun 8, 12:12 – 15:18 · shows in the correct hour slot when day is expanded</p>
       </div>
 
       {/* Description */}
@@ -383,9 +416,8 @@ function MilestoneForm({ state, onClose, onSaved }: { state: SheetState; onClose
 export default function GlobalTimeline() {
   const { data: allGames = [], isLoading } = useListGames();
 
-  // ── Year range (manually configurable) ──────────────────────────────────────
-  const currYear = new Date().getFullYear();
-  const [yearRange, setYearRange] = useState<[number, number]>([currYear - 1, currYear + 3]);
+  // ── Year range (persisted to localStorage) ───────────────────────────────────
+  const [yearRange, setYearRange] = useState<[number, number]>(loadYearRange);
 
   // ── Game filter ──────────────────────────────────────────────────────────────
   // "all" shows top-level games; a gameId shows that game + its sub-games
@@ -442,10 +474,10 @@ export default function GlobalTimeline() {
       const put = (id: string) => { if (!map.has(id)) map.set(id, { milestones: [], tasks: [] }); return map.get(id)!; };
       for (const m of milestones) {
         const dateStr = m.plannedStartDate || m.targetDate;
-        if (dateStr) { const n = nodeFor(new Date(dateStr).getTime(), nodes); if (n) put(n.id).milestones.push(m); }
+        if (dateStr) { const n = nodeFor(parseDate(dateStr).getTime(), nodes); if (n) put(n.id).milestones.push(m); }
       }
       for (const t of tasks) {
-        if (t.dueDate) { const n = nodeFor(new Date(t.dueDate).getTime(), nodes); if (n) put(n.id).tasks.push(t); }
+        if (t.dueDate) { const n = nodeFor(parseDate(t.dueDate).getTime(), nodes); if (n) put(n.id).tasks.push(t); }
       }
       return map;
     }),
@@ -497,7 +529,11 @@ export default function GlobalTimeline() {
           <Input
             type="number"
             value={yearRange[0]}
-            onChange={e => setYearRange(p => [Number(e.target.value), p[1]])}
+            onChange={e => {
+              const next: [number, number] = [Number(e.target.value), yearRange[1]];
+              setYearRange(next);
+              saveYearRange(next);
+            }}
             className="w-16 h-7 text-xs text-center px-1"
             min={1900} max={yearRange[1]}
           />
@@ -505,7 +541,11 @@ export default function GlobalTimeline() {
           <Input
             type="number"
             value={yearRange[1]}
-            onChange={e => setYearRange(p => [p[0], Number(e.target.value)])}
+            onChange={e => {
+              const next: [number, number] = [yearRange[0], Number(e.target.value)];
+              setYearRange(next);
+              saveYearRange(next);
+            }}
             className="w-16 h-7 text-xs text-center px-1"
             min={yearRange[0]} max={2100}
           />
