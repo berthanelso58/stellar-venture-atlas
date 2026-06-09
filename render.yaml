@@ -23,10 +23,12 @@ services:
     region: oregon
     autoDeploy: true
     buildCommand: |
-      corepack enable
+      npm install -g pnpm@9
       pnpm install --frozen-lockfile
       pnpm --filter @workspace/starfield run build
       pnpm --filter @workspace/api-server run build
+      # Note: pnpm@9 via npm -g avoids EROFS when trying to manage /usr/bin/pnpm on Render's read-only FS.
+      # Do not use "corepack enable" here.
     startCommand: pnpm --filter @workspace/db run push || true; SERVE_FRONTEND=1 pnpm --filter @workspace/api-server run start
     healthCheckPath: /api/healthz
     envVars:
