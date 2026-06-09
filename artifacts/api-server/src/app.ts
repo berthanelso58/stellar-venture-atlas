@@ -65,7 +65,7 @@ if (process.env.SERVE_FRONTEND) {
   if (frontendDist) {
     app.use(express.static(frontendDist));
     // SPA fallback for client-side routes (wouter)
-    app.get("*", (_req, res) => {
+    app.get("/*", (_req, res) => {
       res.sendFile(path.join(frontendDist!, "index.html"));
     });
   } else {
