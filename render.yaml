@@ -1,0 +1,37 @@
+# Render Blueprint for Stellar Venture Atlas (Starfield)
+# 
+# How to use:
+# 1. Push this repo to GitHub (or GitLab/Bitbucket).
+# 2. Go to https://dashboard.render.com/ → Blueprints → New Blueprint Instance.
+# 3. Connect the repo. Render will read this file and create the Postgres + Web Service.
+#
+# Alternative (manual): Use the dashboard to create a free Postgres, then a Node web service
+# with the build/start commands below, and link the DB (it will inject DATABASE_URL).
+
+services:
+  - type: web
+    name: stellar-venture-atlas
+    runtime: node
+    plan: free
+    region: oregon
+    autoDeploy: true
+    buildCommand: |
+      corepack enable
+      pnpm install --frozen-lockfile
+      pnpm --filter @workspace/starfield run build
+      pnpm --filter @workspace/api-server run build
+    startCommand: SERVE_FRONTEND=1 pnpm --filter @workspace/api-server run start
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_FRONTEND
+        value: "1"
+      # DATABASE_URL will be injected automatically when linked to the database below
+      # (Render adds it when you connect the DB in the dashboard or via Blueprint).
+
+databases:
+  - name: stellar-venture-atlas-db
+    plan: free
+    region: oregon
+    version: "16"
