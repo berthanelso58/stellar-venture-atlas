@@ -1,12 +1,19 @@
-# Render Blueprint for Stellar Venture Atlas (Starfield)
-# 
-# How to use:
-# 1. Push this repo to GitHub (or GitLab/Bitbucket).
-# 2. Go to https://dashboard.render.com/ → Blueprints → New Blueprint Instance.
-# 3. Connect the repo. Render will read this file and create the Postgres + Web Service.
+# Render deployment config for Stellar Venture Atlas (Starfield)
 #
-# Alternative (manual): Use the dashboard to create a free Postgres, then a Node web service
-# with the build/start commands below, and link the DB (it will inject DATABASE_URL).
+# Database is pre-provisioned on Render (free tier, expires ~30 days from creation).
+# Go to https://dashboard.render.com/d/dpg-d8jujrm47okc73eapc30-a to copy the full
+# "Internal Database URL" (includes password). Add it as DATABASE_URL env var
+# to the web service after creation (or link the DB in dashboard).
+#
+# How to deploy:
+# 1. Push this code to GitHub (the repo https://github.com/berthanelso58/stellar-venture-atlas was created for you).
+# 2. In Render dashboard: New > Blueprint Instance, connect the GitHub repo.
+#    It will read this file and deploy the web service (single service serving both
+#    the React frontend via SERVE_FRONTEND and the Express API).
+# 3. After deploy, add the DATABASE_URL from the DB dashboard to the service env vars.
+#
+# Manual alternative: Create a Node web service from the repo with the build/start
+# commands below + set DATABASE_URL.
 
 services:
   - type: web
@@ -27,11 +34,5 @@ services:
         value: production
       - key: SERVE_FRONTEND
         value: "1"
-      # DATABASE_URL will be injected automatically when linked to the database below
-      # (Render adds it when you connect the DB in the dashboard or via Blueprint).
-
-databases:
-  - name: stellar-venture-atlas-db
-    plan: free
-    region: oregon
-    version: "16"
+      # Add DATABASE_URL (full postgres://... from the stellar-venture-atlas-db dashboard)
+      # You can also link the pre-created DB in the Render service settings.
